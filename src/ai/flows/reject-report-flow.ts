@@ -132,15 +132,15 @@ const rejectReportFlow = ai.defineFlow(
             });
 
             const headers = [
-                'Municipio', 'DANE ESTABLECIMIENTO EDUCATIVO', 'ESTABLECIMIENTO EDUCATIVO', 'Cédula', 'Nombre Completo', 
+                'Municipio', 'DANE ESTABLECIMIENTO EDUCATIVO', 'ESTABLECIMIENTO EDUCATIVO', 'Cédula', 'Nombre Completo', 'Cargo Actual',
                 'Fecha Inicio', 'Fecha Final', 'Fecha Ausencia menos de un día', 'Hora Inicio', 'Hora Final', 
                 'Fecha Solicitud Permiso', 'Fecha Autorización Permiso', 'Motivo de Permiso', 'Observaciones', 'Verificado', 'Estado del Reporte'
             ];
             
             const newSheet = XLSX.utils.json_to_sheet(updatedData, { header: headers, cellDates: true });
 
-            const dateColumns = [5, 6, 7, 10, 11]; // F, G, H, K, L
-            const dateTimeColumns = [14]; // O (Verificado)
+            const dateColumns = [6, 7, 8, 11, 12];
+            const dateTimeColumns = [15];
             const range = XLSX.utils.decode_range(newSheet['!ref']!);
             for (let R = range.s.r + 1; R <= range.e.r; ++R) { // +1 to skip header
                 for (const C of dateColumns) {
@@ -158,7 +158,7 @@ const rejectReportFlow = ai.defineFlow(
             }
 
             newSheet['!cols'] = [
-                { wch: 15 }, { wch: 20 }, { wch: 40 }, { wch: 15 }, { wch: 40 }, 
+                { wch: 15 }, { wch: 20 }, { wch: 40 }, { wch: 15 }, { wch: 40 }, { wch: 40 },
                 { wch: 15 }, { wch: 15 }, { wch: 20 }, { wch: 12 }, { wch: 12 }, 
                 { wch: 20 }, { wch: 20 }, { wch: 25 }, { wch: 50 }, { wch: 20 }, { wch: 25 }
             ];

@@ -31,6 +31,7 @@ import { startOfMonth, endOfMonth, addMonths, format, isValid } from 'date-fns';
 const reportItemSchema = z.object({
   cedula: z.string().min(1, "Requerido"),
   nombreCompleto: z.string().min(1, "Requerido"),
+  cargoActual: z.string().optional(),
   fechaInicio: z.string().optional(),
   fechaFinal: z.string().optional(),
   fechaAusenciaUnDia: z.string().optional(),
@@ -158,6 +159,7 @@ export default function ReportPage() {
       const newReports = filteredData.map(row => ({
         cedula: String(row['CEDULA'] ?? ''),
         nombreCompleto: String(row['NOMBRE COMPLETO'] ?? ''),
+        cargoActual: String(row['CARGO ACTUAL'] ?? ''),
         fechaInicio: '',
         fechaFinal: '',
         fechaAusenciaUnDia: '',
@@ -208,9 +210,11 @@ export default function ReportPage() {
       
       if (foundRow) {
         form.setValue(`reports.${index}.nombreCompleto`, String(foundRow['NOMBRE COMPLETO'] ?? ''));
+        form.setValue(`reports.${index}.cargoActual`, String(foundRow['CARGO ACTUAL'] ?? ''));
         form.trigger(`reports.${index}.nombreCompleto`);
       } else {
         form.setValue(`reports.${index}.nombreCompleto`, '');
+        form.setValue(`reports.${index}.cargoActual`, '');
          toast({
           variant: "destructive",
           title: "Cédula no encontrada",
@@ -251,6 +255,7 @@ export default function ReportPage() {
         reportsToSend = [{
             cedula: 'N/A',
             nombreCompleto: 'N/A',
+            cargoActual: 'N/A',
             observaciones: 'Sin ausentismo reportado para este mes.',
             isManual: true,
             fechaInicio: '',
@@ -412,6 +417,7 @@ export default function ReportPage() {
                             <TableRow>
                               <TableHead className="w-[140px]">Cédula</TableHead>
                               <TableHead className="w-auto whitespace-nowrap">Nombre Completo</TableHead>
+                              <TableHead className="w-auto whitespace-nowrap">Cargo Actual</TableHead>
                               <TableHead>Fecha Inicio</TableHead>
                               <TableHead>Fecha Final</TableHead>
                               <TableHead>Fecha de Ausencia menos de un día</TableHead>
@@ -476,6 +482,21 @@ export default function ReportPage() {
                                           )}
                                       </div>
                                   </TableCell>
+                                  <TableCell>
+                                      <div className="w-64 whitespace-nowrap">
+                                          {field.isManual ? (
+                                              <FormField
+                                              control={form.control}
+                                              name={`reports.${index}.cargoActual`}
+                                              render={({ field }) => (
+                                                  <Input {...field} readOnly className="bg-muted/20" />
+                                              )}
+                                              />
+                                          ) : (
+                                              field.cargoActual
+                                          )}
+                                      </div>
+                                  </TableCell>
                                   <TableCell><FormField control={form.control} name={`reports.${index}.fechaInicio`} render={({ field }) => (<Input type="date" {...field} min={dateRange?.min} max={dateRange?.max} disabled={!monthValue || disableMultiDay} />)}/></TableCell>
                                   <TableCell><FormField control={form.control} name={`reports.${index}.fechaFinal`} render={({ field }) => (<Input type="date" {...field} min={finalDateRange?.min} max={finalDateRange?.max} disabled={!monthValue || disableMultiDay} />)}/></TableCell>
                                   <TableCell><FormField control={form.control} name={`reports.${index}.fechaAusenciaUnDia`} render={({ field }) => (<Input type="date" {...field} min={dateRange?.min} max={dateRange?.max} disabled={!monthValue || disableSingleDay} />)}/></TableCell>
@@ -534,7 +555,7 @@ export default function ReportPage() {
                           type="button"
                           variant="outline"
                           className="mt-6 border-dashed"
-                          onClick={() => append({ cedula: '', nombreCompleto: '', fechaInicio: '', fechaFinal: '', fechaAusenciaUnDia: '', horaInicio: '', horaFinal: '', fechaSolicitudPermiso: '', fechaAutorizacionPermiso: '', motivoPermiso: 'No Justificada', observaciones: '', isManual: true })}>
+                          onClick={() => append({ cedula: '', nombreCompleto: '', cargoActual: '', fechaInicio: '', fechaFinal: '', fechaAusenciaUnDia: '', horaInicio: '', horaFinal: '', fechaSolicitudPermiso: '', fechaAutorizacionPermiso: '', motivoPermiso: 'No Justificada', observaciones: '', isManual: true })}>
                           <PlusCircle className="mr-2 h-4 w-4" />
                           Agregar Fila Manualmente
                       </Button>

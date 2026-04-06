@@ -20,6 +20,7 @@ const ReportItemSchema = z.object({
     'ESTABLECIMIENTO EDUCATIVO': z.string(),
     'Cédula': z.union([z.string(), z.number()]),
     'Nombre Completo': z.string(),
+    'Cargo Actual': z.string().optional(),
     'Fecha Inicio': z.string().optional(),
     'Fecha Final': z.string().optional(),
     'Fecha Ausencia menos de un día': z.string().optional(),

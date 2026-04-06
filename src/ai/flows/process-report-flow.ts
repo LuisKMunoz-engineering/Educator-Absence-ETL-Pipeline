@@ -24,6 +24,7 @@ const parseDate = (dateString?: string) => {
 const reportItemSchema = z.object({
     cedula: z.string(),
     nombreCompleto: z.string(),
+    cargoActual: z.string().optional(),
     fechaInicio: z.string().optional(),
     fechaFinal: z.string().optional(),
     fechaAusenciaUnDia: z.string().optional(),
@@ -136,6 +137,7 @@ const processReportFlow = ai.defineFlow(
                 'ESTABLECIMIENTO EDUCATIVO': input.institutionName,
                 'Cédula': report.cedula,
                 'Nombre Completo': report.nombreCompleto,
+                'Cargo Actual': report.cargoActual,
                 'Fecha Inicio': parseDate(report.fechaInicio),
                 'Fecha Final': parseDate(report.fechaFinal),
                 'Fecha Ausencia menos de un día': parseDate(report.fechaAusenciaUnDia),
@@ -161,7 +163,7 @@ const processReportFlow = ai.defineFlow(
             }
             
             const headers = [
-                'Municipio', 'DANE ESTABLECIMIENTO EDUCATIVO', 'ESTABLECIMIENTO EDUCATIVO', 'Cédula', 'Nombre Completo', 
+                'Municipio', 'DANE ESTABLECIMIENTO EDUCATIVO', 'ESTABLECIMIENTO EDUCATIVO', 'Cédula', 'Nombre Completo', 'Cargo Actual',
                 'Fecha Inicio', 'Fecha Final', 'Fecha Ausencia menos de un día', 'Hora Inicio', 'Hora Final', 
                 'Fecha Solicitud Permiso', 'Fecha Autorización Permiso', 'Motivo de Permiso', 'Observaciones', 'Verificado', 'Estado del Reporte'
             ];
@@ -176,8 +178,8 @@ const processReportFlow = ai.defineFlow(
 
             const newSheet = XLSX.utils.json_to_sheet(orderedData, { header: headers, cellDates: true });
             
-            const dateColumns = [5, 6, 7, 10, 11]; // F, G, H, K, L
-            const dateTimeColumns = [14]; // O (Verificado)
+            const dateColumns = [6, 7, 8, 11, 12];
+            const dateTimeColumns = [15];
 
             const range = XLSX.utils.decode_range(newSheet['!ref']!);
             for (let R = range.s.r + 1; R <= range.e.r; ++R) { // +1 to skip header
@@ -196,7 +198,7 @@ const processReportFlow = ai.defineFlow(
             }
             
             newSheet['!cols'] = [
-                { wch: 15 }, { wch: 20 }, { wch: 40 }, { wch: 15 }, { wch: 40 }, 
+                { wch: 15 }, { wch: 20 }, { wch: 40 }, { wch: 15 }, { wch: 40 }, { wch: 40 },
                 { wch: 15 }, { wch: 15 }, { wch: 20 }, { wch: 12 }, { wch: 12 }, 
                 { wch: 20 }, { wch: 20 }, { wch: 25 }, { wch: 50 }, { wch: 20 }, { wch: 25 }
             ];

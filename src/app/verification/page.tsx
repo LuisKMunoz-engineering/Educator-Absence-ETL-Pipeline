@@ -34,6 +34,7 @@ const reportItemSchema = z.object({
   'ESTABLECIMIENTO EDUCATIVO': z.string(),
   'Cédula': z.string(),
   'Nombre Completo': z.string(),
+  'Cargo Actual': z.string().optional(),
   'Fecha Inicio': z.string().optional(),
   'Fecha Final': z.string().optional(),
   'Fecha Ausencia menos de un día': z.string().optional(),
@@ -421,6 +422,7 @@ export default function VerificationPage() {
                                         <TableRow>
                                             <TableHead>Cédula</TableHead>
                                             <TableHead>Nombre Completo</TableHead>
+                                            <TableHead>Cargo Actual</TableHead>
                                             <TableHead>Fecha Inicio</TableHead>
                                             <TableHead>Fecha Final</TableHead>
                                             <TableHead>Fecha Ausencia &lt; 1 día</TableHead>
@@ -443,15 +445,18 @@ export default function VerificationPage() {
                                                 <TableCell>
                                                     <div className="w-60 whitespace-nowrap">{report['Nombre Completo']}</div>
                                                 </TableCell>
-                                                <TableCell><div className="w-28 whitespace-nowrap">{report['Fecha Inicio']}</div></TableCell>
-                                                <TableCell><div className="w-28 whitespace-nowrap">{report['Fecha Final']}</div></TableCell>
-                                                <TableCell><div className="w-36 whitespace-nowrap">{report['Fecha Ausencia menos de un día']}</div></TableCell>
-                                                <TableCell><div className="w-24 whitespace-nowrap">{report['Hora Inicio']}</div></TableCell>
-                                                <TableCell><div className="w-24 whitespace-nowrap">{report['Hora Final']}</div></TableCell>
-                                                <TableCell><div className="w-28 whitespace-nowrap">{report['Fecha Solicitud Permiso']}</div></TableCell>
-                                                <TableCell><div className="w-32 whitespace-nowrap">{report['Fecha Autorización Permiso']}</div></TableCell>
-                                                <TableCell><div className="w-40 whitespace-nowrap">{report['Motivo de Permiso']}</div></TableCell>
-                                                <TableCell><div className="w-60 whitespace-nowrap truncate">{report['Observaciones']}</div></TableCell>
+                                                <TableCell>
+                                                    <div className="w-60 whitespace-nowrap">{report['Cargo Actual']}</div>
+                                                </TableCell>
+                                                <TableCell><div className="w-28 whitespace-nowrap">{report['Fecha Inicio'] || ''}</div></TableCell>
+                                                <TableCell><div className="w-28 whitespace-nowrap">{report['Fecha Final'] || ''}</div></TableCell>
+                                                <TableCell><div className="w-36 whitespace-nowrap">{report['Fecha Ausencia menos de un día'] || ''}</div></TableCell>
+                                                <TableCell><div className="w-24 whitespace-nowrap">{report['Hora Inicio'] || ''}</div></TableCell>
+                                                <TableCell><div className="w-24 whitespace-nowrap">{report['Hora Final'] || ''}</div></TableCell>
+                                                <TableCell><div className="w-28 whitespace-nowrap">{report['Fecha Solicitud Permiso'] || ''}</div></TableCell>
+                                                <TableCell><div className="w-32 whitespace-nowrap">{report['Fecha Autorización Permiso'] || ''}</div></TableCell>
+                                                <TableCell><div className="w-40 whitespace-nowrap">{report['Motivo de Permiso'] || ''}</div></TableCell>
+                                                <TableCell><div className="w-60 whitespace-nowrap truncate">{report['Observaciones'] || ''}</div></TableCell>
                                                 <TableCell><div className="w-40 whitespace-nowrap">{report['Estado del Reporte'] || 'Enviado'}</div></TableCell>
                                                 <TableCell><div className="w-44 whitespace-nowrap">{report['Verificado'] || 'Pendiente'}</div></TableCell>
                                             </TableRow>

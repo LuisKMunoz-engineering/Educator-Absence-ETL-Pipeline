@@ -14,6 +14,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 interface ReportItem {
   cedula: string;
   nombreCompleto: string;
+  cargoActual?: string;
   fechaInicio?: string;
   fechaFinal?: string;
   fechaAusenciaUnDia?: string;
@@ -228,6 +229,7 @@ function SummaryDisplay() {
                               <TableRow>
                                 <TableHead>Cédula</TableHead>
                                 <TableHead>Nombre</TableHead>
+                                <TableHead>Cargo Actual</TableHead>
                                 <TableHead>Fechas</TableHead>
                                 <TableHead>Horas</TableHead>
                                 <TableHead>Permiso</TableHead>
@@ -240,6 +242,7 @@ function SummaryDisplay() {
                                 <TableRow key={index}>
                                   <TableCell className="font-medium">{report.cedula}</TableCell>
                                   <TableCell>{report.nombreCompleto}</TableCell>
+                                  <TableCell>{report.cargoActual}</TableCell>
                                   <TableCell className="text-xs">
                                     {report.fechaInicio && <p><strong>Inicio:</strong> {report.fechaInicio}</p>}
                                     {report.fechaFinal && <p><strong>Final:</strong> {report.fechaFinal}</p>}
