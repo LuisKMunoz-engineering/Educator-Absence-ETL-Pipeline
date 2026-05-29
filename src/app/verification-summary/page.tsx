@@ -4,7 +4,7 @@ import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { CheckCircle, Loader2, User, School, LogOut, ListChecks } from 'lucide-react';
+import { CheckCircle, Loader2, User, School, LogOut, ListChecks, ArrowLeft } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
 interface VerifiedInstitution {
@@ -35,6 +35,10 @@ function VerificationSummaryDisplay() {
     const handleLogout = () => {
         localStorage.clear();
         router.push('/login');
+    };
+
+    const handleBackToVerification = () => {
+        router.push('/verification');
     };
 
     const getMonthYear = (monthString: string) => {
@@ -91,7 +95,11 @@ function VerificationSummaryDisplay() {
                     </div>
                 </div>
             </CardContent>
-            <CardFooter>
+            <CardFooter className="flex flex-col sm:flex-row gap-4">
+                <Button onClick={handleBackToVerification} variant="outline" className="w-full" size="lg">
+                    <ArrowLeft className="mr-2 h-4 w-4" />
+                    Verificar Otros Reportes
+                </Button>
                 <Button onClick={handleLogout} className="w-full" size="lg">
                     <LogOut className="mr-2 h-4 w-4" />
                     Finalizar y Cerrar Sesión

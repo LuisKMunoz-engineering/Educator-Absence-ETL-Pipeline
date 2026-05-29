@@ -59,7 +59,33 @@ const formSchema = z.object({
 type FormValues = z.infer<typeof formSchema>;
 
 const municipalities = ["ALMAGUER", "ARGELIA", "BALBOA", "BOLIVAR", "BUENOS AIRES", "CAJIBIO", "CALDONO", "CALOTO", "CORINTO", "EL TAMBO", "FLORENCIA", "GUACHENE", "GUAPI", "INZA", "JAMBALO", "LA SIERRA", "LA VEGA", "LOPEZ DE MICAY", "MERCADERES", "MIRANDA", "MORALES", "PADILLA", "PAEZ", "PATIA Y AFRO SUR", "PIAMONTE", "PIENDAMO", "PUERTO TEJADA", "PURACE", "ROSAS", "SAN SEBASTIAN", "SANTANDER DE QUILICHAO", "SANTA ROSA", "SANTA ROSA MBC", "SILVIA", "SOTARA", "SUAREZ", "SUCRE", "TIMBIO", "TIMBIQUI", "TORIBIO", "TOTORO", "VILLARICA"];
-const motivosDePermiso = ["Adopción", "Calamidad Doméstica", "Capacitación", "Cita Médica", "Cita Médica Familiar", "Comisión de Servicios", "Diligencias Administrativas", "Enfermedad Hijos o Familiar", "Evento Deportivo", "Matrimonio", "Huelga Autorizada", "Huelga No Autorizada", "No autorizada", "Permisos Sindicales", "Tratamiento Médico", "Amenaza y Desplazamiento", "Arresto Correccional", "Desaparición", "Hospitalización", "Incapacidad", "Lactancia", "Licencia No Remunerada", "No Justificada", "Retiro", "Sanción", "Secuestro"];
+const motivosDePermiso = ["Adopción", 
+  "Calamidad Doméstica", 
+  "Capacitación", 
+  "Cita Médica", 
+  "Cita Médica Familiar",
+  "Comisión de Estudios", 
+  "Comisión de Servicios", 
+  "Diligencias Administrativas", 
+  "Enfermedad Hijos o Familiar", 
+  "Evento Deportivo", 
+  "Matrimonio", 
+  "Huelga Autorizada", 
+  "Huelga No Autorizada", 
+  "Permisos Sindicales", 
+  "Tratamiento Médico", 
+  "Amenaza y Desplazamiento", 
+  "Arresto Correccional", 
+  "Desaparición", 
+  "Hospitalización", 
+  "Incapacidad", 
+  "Lactancia", 
+  "Licencia No Remunerada", 
+  "No Justificada", 
+  "Retiro", 
+  "Sanción", 
+  "Secuestro", 
+  "Otros"];
 const motivosDePermisoSinSolicitud = ["No Justificada"];
 
 export default function ReportPage() {
