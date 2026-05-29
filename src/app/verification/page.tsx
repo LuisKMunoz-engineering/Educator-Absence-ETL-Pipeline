@@ -16,7 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { Send, LogOut, Loader2, Upload, FileWarning } from "lucide-react";
+import { Send, LogOut, Loader2, Upload, FileWarning, ClipboardCheck, ExternalLink } from "lucide-react";
 import Image from "next/image";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useState, useEffect } from "react";
@@ -79,6 +79,7 @@ export default function VerificationPage() {
   const [verifiedStatus, setVerifiedStatus] = useState<Record<string, boolean>>({});
   const [isRejectionLoading, setIsRejectionLoading] = useState<string | null>(null);
   const [rejectionTarget, setRejectionTarget] = useState<{ daneCode: string, institutionName: string } | null>(null);
+  const [showWelcomeDialog, setShowWelcomeDialog] = useState(true);
 
   useEffect(() => {
     const name = localStorage.getItem('userName') || 'Director de Núcleo';
@@ -486,6 +487,39 @@ export default function VerificationPage() {
                 </div>
             </form>
             </Form>
+
+            {/* Welcome Dialog */}
+            <AlertDialog open={showWelcomeDialog} onOpenChange={setShowWelcomeDialog}>
+              <AlertDialogContent className="max-w-md">
+                <AlertDialogHeader>
+                  <AlertDialogTitle className="text-2xl font-bold text-primary flex items-center gap-2">
+                    <ClipboardCheck className="h-6 w-6" />
+                    Bienvenido, Señor Director
+                  </AlertDialogTitle>
+                  <AlertDialogDescription className="text-base py-4">
+                    ¿Qué acción va a realizar en este momento?
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter className="flex flex-col sm:flex-col gap-3">
+                  <Button 
+                    className="w-full justify-start py-6 text-base" 
+                    onClick={() => setShowWelcomeDialog(false)}
+                  >
+                    <ClipboardCheck className="mr-3 h-5 w-5" />
+                    Verificar reportes enviados por las Instituciones Educativas
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    className="w-full justify-start py-6 text-base border-primary text-primary hover:bg-primary/10"
+                    onClick={() => router.push('/verification/soportes')}
+                  >
+                    <ExternalLink className="mr-3 h-5 w-5" />
+                    Realizar reporte de Ausentismo ante la SED-CAUCA
+                  </Button>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+
              <AlertDialog open={!!rejectionTarget} onOpenChange={(open) => !open && setRejectionTarget(null)}>
               <AlertDialogContent>
                   <AlertDialogHeader>

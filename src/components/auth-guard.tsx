@@ -36,8 +36,8 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
 
       const roleConfig = ROLES_CONFIG[userRole];
 
+      // We use startsWith to allow sub-routes like /verification/soportes
       if (!roleConfig || !roleConfig.allowedRoutes.some(route => pathname.startsWith(route))) {
-         // If user tries to access a page not allowed for their role, redirect them.
          router.replace(roleConfig.redirect);
       } else {
         setIsChecking(false);
