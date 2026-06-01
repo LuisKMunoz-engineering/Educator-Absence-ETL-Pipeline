@@ -26,10 +26,11 @@ export default function LoginPage() {
     setIsLoading(true);
 
     const lowerCaseEmail = email.trim().toLowerCase();
+    const cleanPassword = password.trim();
 
     try {
       // 1. Check Admin
-      if (password === ADMIN_PASSWORD && lowerCaseEmail === 'admin') {
+      if (cleanPassword === ADMIN_PASSWORD && lowerCaseEmail === 'admin') {
         localStorage.setItem('isAuthenticated', 'true');
         localStorage.setItem('userRole', 'admin');
         router.push('/downloads');
@@ -43,12 +44,14 @@ export default function LoginPage() {
           const arrayBuffer = await responseR.arrayBuffer();
           const workbook = XLSX.read(arrayBuffer, { type: 'buffer' });
           const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-          const jsonData = XLSX.utils.sheet_to_json(worksheet) as any[];
+          // Use raw: false to get strings as formatted in Excel
+          const jsonData = XLSX.utils.sheet_to_json(worksheet, { raw: false }) as any[];
 
-          const rectorFound = jsonData.find(row => 
-            String(row['EMAIL'] || '').toLowerCase() === lowerCaseEmail && 
-            String(row['contraseña'] || '') === password
-          );
+          const rectorFound = jsonData.find(row => {
+            const rowEmail = String(row['EMAIL'] || '').trim().toLowerCase();
+            const rowPass = String(row['contraseña'] || '').trim();
+            return rowEmail === lowerCaseEmail && rowPass === cleanPassword;
+          });
 
           if (rectorFound) {
             localStorage.setItem('isAuthenticated', 'true');
@@ -68,16 +71,19 @@ export default function LoginPage() {
       }
 
       // 3. Check Director from directoresDeNucleo.xlsx
-      if (password === DIRECTOR_PASSWORD) {
+      if (cleanPassword === DIRECTOR_PASSWORD) {
         try {
           const responseD = await fetch('/data/directoresDeNucleo.xlsx');
           if (responseD.ok) {
             const arrayBuffer = await responseD.arrayBuffer();
             const workbook = XLSX.read(arrayBuffer, { type: 'buffer' });
             const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-            const jsonData = XLSX.utils.sheet_to_json(worksheet) as any[];
+            const jsonData = XLSX.utils.sheet_to_json(worksheet, { raw: false }) as any[];
 
-            const directorRows = jsonData.filter(row => row['Correo electrónico']?.toLowerCase() === lowerCaseEmail);
+            const directorRows = jsonData.filter(row => {
+               const rowEmail = String(row['Correo electrónico'] || '').trim().toLowerCase();
+               return rowEmail === lowerCaseEmail;
+            });
 
             if (directorRows.length > 0) {
               const directorData = directorRows[0];
@@ -100,7 +106,7 @@ export default function LoginPage() {
       toast({
         variant: 'destructive',
         title: 'Error de autenticación',
-        description: 'Las credenciales no coinciden con nuestros registros.',
+        description: 'Las credenciales no coinciden con nuestros registros. Verifique el correo y la contraseña.',
       });
 
     } catch (error) {
@@ -121,7 +127,7 @@ export default function LoginPage() {
         <Card className="shadow-2xl">
           <CardHeader className="text-center items-center">
             <Image src="/EscudoSedCaucaB.png" alt="Escudo SED Cauca" width={256} height={256} className="mb-4" />
-            <CardTitle className="text-3xl font-headline">AppAusentismo</CardTitle>
+            <CardTitle className="text-3xl font-headline text-primary">AppAusentismo</CardTitle>
             <CardDescription>Ingrese sus credenciales para continuar</CardDescription>
           </CardHeader>
           <form onSubmit={handleLogin}>
@@ -155,7 +161,7 @@ export default function LoginPage() {
             </CardContent>
             <CardFooter>
               <Button type="submit" className="w-full" disabled={isLoading}>
-                {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <LogIn className="mr-2 h-4 w-4" />}
                 {isLoading ? 'Ingresando...' : 'Ingresar'}
               </Button>
             </CardFooter>
