@@ -385,7 +385,7 @@ export default function ReportPage() {
                               const fechaAusenciaV = form.watch(`reports.${index}.fechaAusenciaUnDia`);
                               const horaInicioV = form.watch(`reports.${index}.horaInicio`);
                               const horaFinalV = form.watch(`reports.${index}.horaFinal`);
-                              const disableMulti = !!(fechaAusenciaV || dramaInicioV || horaFinalV);
+                              const disableMulti = !!(fechaAusenciaV || horaInicioV || horaFinalV);
                               const disableSingle = !!(fechaInicioV || fechaFinalV);
                               const fechaSolV = form.watch(`reports.${index}.fechaSolicitudPermiso`);
                               const motivosPermitidos = fechaSolV ? motivosDePermiso : motivosDePermisoSinSolicitud;
