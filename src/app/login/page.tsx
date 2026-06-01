@@ -11,10 +11,8 @@ import { LogIn, Loader2 } from 'lucide-react';
 import Image from 'next/image';
 import * as XLSX from 'xlsx';
 
-
-const RECTOR_PASSWORD = '01234';
-const DIRECTOR_PASSWORD = '012295';
 const ADMIN_PASSWORD = '12345';
+const DIRECTOR_PASSWORD = '012295';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -27,19 +25,10 @@ export default function LoginPage() {
     e.preventDefault();
     setIsLoading(true);
 
-    // Give feedback to the user
-    await new Promise(resolve => setTimeout(resolve, 500)); 
-    
-    const lowerCaseEmail = email.toLowerCase();
+    const lowerCaseEmail = email.trim().toLowerCase();
 
     try {
-      if (password === RECTOR_PASSWORD) {
-        localStorage.setItem('isAuthenticated', 'true');
-        localStorage.setItem('userRole', 'rector');
-        router.push('/report');
-        return;
-      }
-      
+      // 1. Check Admin
       if (password === ADMIN_PASSWORD && lowerCaseEmail === 'admin') {
         localStorage.setItem('isAuthenticated', 'true');
         localStorage.setItem('userRole', 'admin');
@@ -47,57 +36,80 @@ export default function LoginPage() {
         return;
       }
 
-      if (password === DIRECTOR_PASSWORD) {
-          try {
-              const response = await fetch('/data/directoresDeNucleo.xlsx');
-              if (!response.ok) {
-                  throw new Error("No se pudo cargar el archivo de directores.");
-              }
-              const arrayBuffer = await response.arrayBuffer();
-              const workbook = XLSX.read(arrayBuffer, { type: 'buffer' });
-              const worksheetName = workbook.SheetNames[0];
-              const worksheet = workbook.Sheets[worksheetName];
-              const jsonData = XLSX.utils.sheet_to_json(worksheet) as any[];
+      // 2. Check Rector from rectores.xlsx
+      try {
+        const responseR = await fetch('/data/rectores.xlsx');
+        if (responseR.ok) {
+          const arrayBuffer = await responseR.arrayBuffer();
+          const workbook = XLSX.read(arrayBuffer, { type: 'buffer' });
+          const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+          const jsonData = XLSX.utils.sheet_to_json(worksheet) as any[];
 
-              const directorRows = jsonData.filter(row => row['Correo electrónico']?.toLowerCase() === lowerCaseEmail);
+          const rectorFound = jsonData.find(row => 
+            String(row['EMAIL'] || '').toLowerCase() === lowerCaseEmail && 
+            String(row['contraseña'] || '') === password
+          );
 
-              if (directorRows.length > 0) {
-                  const directorData = directorRows[0];
-                  const daneCodes = directorRows.map(row => String(row['CODIGO DANE']));
-                  
-                  localStorage.setItem('isAuthenticated', 'true');
-                  localStorage.setItem('userRole', 'director');
-                  localStorage.setItem('userName', directorData['NOMBRE'] || 'Director');
-                  localStorage.setItem('userCedula', String(directorData['IDENTIFICACIÓN'] || ''));
-                  localStorage.setItem('userDaneCodes', JSON.stringify(daneCodes));
-                  router.push('/verification');
-                  return;
-              }
-          } catch (error) {
-              console.error("Error al procesar archivo de directores:", error);
-              toast({
-                  variant: 'destructive',
-                  title: 'Error de Configuración',
-                  description: 'No se pudo leer el archivo de directores de núcleo. Contacte al administrador.',
-              });
-              setIsLoading(false);
-              return;
+          if (rectorFound) {
+            localStorage.setItem('isAuthenticated', 'true');
+            localStorage.setItem('userRole', 'rector');
+            localStorage.setItem('userName', String(rectorFound['NOMBRE DEL RECTOR O DIRECTOR RURAL'] || ''));
+            localStorage.setItem('userMunicipality', String(rectorFound['MUNICIPIO'] || ''));
+            localStorage.setItem('userDaneNumber', String(rectorFound['DANE'] || ''));
+            localStorage.setItem('userInstitutionName', String(rectorFound['ESTABLECIMIENTO EDUCATIVO'] || ''));
+            localStorage.setItem('userPosition', 'Rector / Director Rural');
+            
+            router.push('/report');
+            return;
           }
+        }
+      } catch (e) {
+        console.error("Error loading rectores.xlsx", e);
+      }
+
+      // 3. Check Director from directoresDeNucleo.xlsx
+      if (password === DIRECTOR_PASSWORD) {
+        try {
+          const responseD = await fetch('/data/directoresDeNucleo.xlsx');
+          if (responseD.ok) {
+            const arrayBuffer = await responseD.arrayBuffer();
+            const workbook = XLSX.read(arrayBuffer, { type: 'buffer' });
+            const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+            const jsonData = XLSX.utils.sheet_to_json(worksheet) as any[];
+
+            const directorRows = jsonData.filter(row => row['Correo electrónico']?.toLowerCase() === lowerCaseEmail);
+
+            if (directorRows.length > 0) {
+              const directorData = directorRows[0];
+              const daneCodes = directorRows.map(row => String(row['CODIGO DANE']));
+              
+              localStorage.setItem('isAuthenticated', 'true');
+              localStorage.setItem('userRole', 'director');
+              localStorage.setItem('userName', directorData['NOMBRE'] || 'Director');
+              localStorage.setItem('userCedula', String(directorData['IDENTIFICACIÓN'] || ''));
+              localStorage.setItem('userDaneCodes', JSON.stringify(daneCodes));
+              router.push('/verification');
+              return;
+            }
+          }
+        } catch (error) {
+          console.error("Error al procesar archivo de directores:", error);
+        }
       }
 
       toast({
         variant: 'destructive',
         title: 'Error de autenticación',
-        description: 'El correo o la contraseña son incorrectos.',
+        description: 'Las credenciales no coinciden con nuestros registros.',
       });
 
     } catch (error) {
-        console.error("Error durante el login:", error);
-        toast({
-          variant: 'destructive',
-          title: 'Error de Sistema',
-          description: (error as Error).message || 'No se pudo procesar el inicio de sesión.',
-        });
+      console.error("Error durante el login:", error);
+      toast({
+        variant: 'destructive',
+        title: 'Error de Sistema',
+        description: 'No se pudo procesar el inicio de sesión.',
+      });
     } finally {
       setIsLoading(false);
     }
@@ -116,11 +128,11 @@ export default function LoginPage() {
             <CardContent>
               <div className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="email">Usuario / Correo Electrónico</Label>
+                  <Label htmlFor="email">Correo Electrónico</Label>
                   <Input
                     id="email"
-                    type="text"
-                    placeholder="usuario o usuario@correo.com"
+                    type="email"
+                    placeholder="usuario@correo.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     required
