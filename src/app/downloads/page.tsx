@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { LogOut, Loader2, Download, List, RefreshCw, Users, Shield, Trash2, Plus, Save } from "lucide-react";
+import { LogOut, Loader2, Download, List, RefreshCw, Users, Shield, Trash2, Plus, Save, FileSpreadsheet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -29,6 +29,7 @@ export default function DownloadsPage() {
   // Users State
   const [users, setUsers] = useState<User[]>([]);
   const [isLoadingUsers, setIsLoadingUsers] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
   const [isEditingUser, setIsEditingUser] = useState<User | null>(null);
   const [isUserDialogOpen, setIsUserDialogOpen] = useState(false);
 
@@ -49,14 +50,29 @@ export default function DownloadsPage() {
   const fetchUsers = async () => {
     setIsLoadingUsers(true);
     try {
-      // First sync if empty (handled in the flow)
-      await syncFromExcel();
       const result = await getUsers();
       setUsers(result);
     } catch (error: any) {
       toast({ variant: "destructive", title: "Error al Cargar Usuarios", description: error.message });
     } finally {
       setIsLoadingUsers(false);
+    }
+  };
+
+  const handleSyncUsers = async () => {
+    setIsSyncing(true);
+    try {
+      const result = await syncFromExcel();
+      if (result.success) {
+        toast({ title: "Sincronización Exitosa", description: `Se encontraron ${result.count} usuarios.` });
+        fetchUsers();
+      } else {
+        throw new Error(result.error || "Ocurrió un error al sincronizar.");
+      }
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Error de Sincronización", description: error.message });
+    } finally {
+      setIsSyncing(false);
     }
   };
 
@@ -93,8 +109,8 @@ export default function DownloadsPage() {
     const role = formData.get('role') as 'rector' | 'director';
     
     const newUser: User = {
-        email: formData.get('email') as string,
-        password: formData.get('password') as string,
+        email: (formData.get('email') as string).trim().toLowerCase(),
+        password: (formData.get('password') as string).trim(),
         role: role,
         name: formData.get('name') as string,
         municipality: formData.get('municipality') as string || undefined,
@@ -106,7 +122,7 @@ export default function DownloadsPage() {
 
     try {
         await saveUser(newUser);
-        toast({ title: "Usuario Guardado", description: "El usuario ha sido actualizado correctamente." });
+        toast({ title: isEditingUser ? "Usuario Actualizado" : "Usuario Creado" });
         setIsUserDialogOpen(false);
         setIsEditingUser(null);
         fetchUsers();
@@ -144,7 +160,7 @@ export default function DownloadsPage() {
       <header className="p-4 flex justify-between items-center bg-card border-b sticky top-0 z-10 h-24">
         <div className="flex items-center">
           <Image src="/EscudoSedCaucaB.png" alt="Escudo SED Cauca" width={80} height={80} />
-          <h2 className="ml-4 text-xl font-bold text-primary hidden md:block">Panel de Administración</h2>
+          <h2 className="ml-4 text-xl font-bold text-primary hidden md:block uppercase">Panel de Administración</h2>
         </div>
         <div className="flex items-center">
           <Button variant="ghost" size="sm" onClick={handleLogout}>
@@ -154,24 +170,24 @@ export default function DownloadsPage() {
         </div>
       </header>
 
-      <main className="p-4 md:p-6 max-w-6xl mx-auto">
+      <main className="p-4 md:p-6 max-w-7xl mx-auto">
         <Tabs defaultValue="reports" className="w-full">
-          <TabsList className="grid w-full grid-cols-2 mb-8">
-            <TabsTrigger value="reports" className="flex items-center gap-2">
-              <Download className="h-4 w-4" /> Reportes Consolidados
+          <TabsList className="grid w-full grid-cols-2 mb-8 h-12">
+            <TabsTrigger value="reports" className="flex items-center gap-2 text-base">
+              <Download className="h-5 w-5" /> Reportes Consolidados
             </TabsTrigger>
-            <TabsTrigger value="users" className="flex items-center gap-2">
-              <Users className="h-4 w-4" /> Gestión de Usuarios
+            <TabsTrigger value="users" className="flex items-center gap-2 text-base">
+              <Users className="h-5 w-5" /> Gestión de Usuarios
             </TabsTrigger>
           </TabsList>
 
           <TabsContent value="reports">
-            <Card>
+            <Card className="shadow-lg">
               <CardHeader>
                 <div className="flex justify-between items-start">
                   <div>
                     <CardTitle className="text-2xl font-bold text-primary font-headline">Descarga de Reportes</CardTitle>
-                    <CardDescription>Descargue los archivos consolidados de ausentismo.</CardDescription>
+                    <CardDescription>Visualice y descargue los archivos consolidados de ausentismo del mes.</CardDescription>
                   </div>
                   <Button variant="outline" size="icon" onClick={fetchReports} disabled={isLoadingReports}>
                     <RefreshCw className={`h-4 w-4 ${isLoadingReports ? 'animate-spin' : ''}`} />
@@ -180,23 +196,25 @@ export default function DownloadsPage() {
               </CardHeader>
               <CardContent>
                 {isLoadingReports ? (
-                  <div className="flex justify-center py-10"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
+                  <div className="flex justify-center py-20"><Loader2 className="h-10 w-10 animate-spin text-primary" /></div>
                 ) : reports.length > 0 ? (
                   <Table>
                     <TableHeader>
                       <TableRow>
                         <TableHead>Mes del Reporte</TableHead>
+                        <TableHead>Nombre del Archivo</TableHead>
                         <TableHead className="text-right">Acciones</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {reports.map((name) => (
                         <TableRow key={name}>
-                          <TableCell className="font-medium capitalize">{getFormattedMonth(name)}</TableCell>
+                          <TableCell className="font-semibold capitalize text-base">{getFormattedMonth(name)}</TableCell>
+                          <TableCell className="text-muted-foreground">{name}</TableCell>
                           <TableCell className="text-right">
                             <Button size="sm" onClick={() => handleDownload(name)} disabled={downloadingFile === name}>
                               {downloadingFile === name ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
-                              Descargar
+                              Descargar .xlsx
                             </Button>
                           </TableCell>
                         </TableRow>
@@ -204,9 +222,9 @@ export default function DownloadsPage() {
                     </TableBody>
                   </Table>
                 ) : (
-                  <div className="text-center py-10 border border-dashed rounded-lg">
-                    <List className="mx-auto h-12 w-12 text-muted-foreground" />
-                    <p className="mt-4 text-muted-foreground">No hay reportes disponibles.</p>
+                  <div className="text-center py-20 border border-dashed rounded-lg bg-muted/20">
+                    <List className="mx-auto h-12 w-12 text-muted-foreground opacity-50" />
+                    <p className="mt-4 text-muted-foreground font-medium">No se encontraron archivos de reporte en el servidor.</p>
                   </div>
                 )}
               </CardContent>
@@ -214,17 +232,22 @@ export default function DownloadsPage() {
           </TabsContent>
 
           <TabsContent value="users">
-            <Card>
+            <Card className="shadow-lg">
               <CardHeader>
-                <div className="flex justify-between items-start">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                   <div>
                     <CardTitle className="text-2xl font-bold text-primary font-headline">Gestión de Usuarios</CardTitle>
-                    <CardDescription>Cree y administre las cuentas de Rectores y Directores.</CardDescription>
+                    <CardDescription>Administre las cuentas de Rectores y Directores de Núcleo que acceden al sistema.</CardDescription>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap gap-2">
+                    <Button variant="outline" size="sm" onClick={handleSyncUsers} disabled={isSyncing} className="gap-2">
+                      <FileSpreadsheet className={`h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} />
+                      Sincronizar desde Excel
+                    </Button>
                     <Button variant="outline" size="icon" onClick={fetchUsers} disabled={isLoadingUsers}>
                       <RefreshCw className={`h-4 w-4 ${isLoadingUsers ? 'animate-spin' : ''}`} />
                     </Button>
+                    
                     <Dialog open={isUserDialogOpen} onOpenChange={(open) => { setIsUserDialogOpen(open); if(!open) setIsEditingUser(null); }}>
                       <DialogTrigger asChild>
                         <Button className="gap-2"><Plus className="h-4 w-4" /> Nuevo Usuario</Button>
@@ -232,47 +255,46 @@ export default function DownloadsPage() {
                       <DialogContent className="max-w-2xl">
                         <form onSubmit={handleSaveUser}>
                         <DialogHeader>
-                          <DialogTitle>{isEditingUser ? 'Editar Usuario' : 'Nuevo Usuario'}</DialogTitle>
-                          <DialogDescription>Complete los datos del usuario.</DialogDescription>
+                          <DialogTitle className="text-xl font-bold text-primary">{isEditingUser ? 'Editar Usuario' : 'Crear Nuevo Usuario'}</DialogTitle>
+                          <DialogDescription>Ingrese los datos para la cuenta de acceso.</DialogDescription>
                         </DialogHeader>
-                        <div className="grid grid-cols-2 gap-4 py-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 py-6">
                           <div className="space-y-2">
-                            <Label>Rol</Label>
+                            <Label>Rol del Usuario</Label>
                             <Select name="role" defaultValue={isEditingUser?.role || 'rector'} onValueChange={(v) => setIsEditingUser(prev => prev ? {...prev, role: v as any} : {role: v as any} as any)}>
                               <SelectTrigger><SelectValue /></SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="rector">Rector</SelectItem>
+                                <SelectItem value="rector">Rector / Director Rural</SelectItem>
                                 <SelectItem value="director">Director de Núcleo</SelectItem>
                               </SelectContent>
                             </Select>
                           </div>
                           <div className="space-y-2">
                             <Label>Nombre Completo</Label>
-                            <Input name="name" defaultValue={isEditingUser?.name} required />
+                            <Input name="name" defaultValue={isEditingUser?.name} required placeholder="Nombre y Apellidos" />
                           </div>
                           <div className="space-y-2">
-                            <Label>Correo / Usuario</Label>
-                            <Input name="email" type="text" defaultValue={isEditingUser?.email} required />
+                            <Label>Correo Electrónico (Usuario)</Label>
+                            <Input name="email" type="email" defaultValue={isEditingUser?.email} required placeholder="ejemplo@correo.com" />
                           </div>
                           <div className="space-y-2">
                             <Label>Contraseña</Label>
-                            <Input name="password" type="text" defaultValue={isEditingUser?.password} required />
+                            <Input name="password" type="text" defaultValue={isEditingUser?.password} required placeholder="Clave de acceso" />
                           </div>
                           
-                          {/* Conditional Fields */}
                           {(isEditingUser?.role === 'rector' || !isEditingUser?.role) && (
                             <>
                               <div className="space-y-2">
-                                <Label>DANE</Label>
-                                <Input name="dane" defaultValue={isEditingUser?.dane} />
+                                <Label>Código DANE</Label>
+                                <Input name="dane" defaultValue={isEditingUser?.dane} placeholder="1234567890" />
                               </div>
                               <div className="space-y-2">
-                                <Label>Establecimiento</Label>
-                                <Input name="institution" defaultValue={isEditingUser?.institution} />
+                                <Label>Establecimiento Educativo</Label>
+                                <Input name="institution" defaultValue={isEditingUser?.institution} placeholder="Nombre de la Institución" />
                               </div>
-                              <div className="space-y-2">
+                              <div className="space-y-2 col-span-full">
                                 <Label>Municipio</Label>
-                                <Input name="municipality" defaultValue={isEditingUser?.municipality} />
+                                <Input name="municipality" defaultValue={isEditingUser?.municipality} placeholder="Nombre del Municipio" />
                               </div>
                             </>
                           )}
@@ -280,18 +302,19 @@ export default function DownloadsPage() {
                           {isEditingUser?.role === 'director' && (
                             <>
                               <div className="space-y-2">
-                                <Label>Cédula</Label>
-                                <Input name="cedula" defaultValue={isEditingUser?.cedula} />
+                                <Label>Cédula de Ciudadanía</Label>
+                                <Input name="cedula" defaultValue={isEditingUser?.cedula} placeholder="Número de identificación" />
                               </div>
-                              <div className="space-y-2 col-span-2">
-                                <Label>Códigos DANE (separados por coma)</Label>
-                                <Input name="daneCodes" defaultValue={isEditingUser?.daneCodes?.join(', ')} placeholder="1234, 5678, ..." />
+                              <div className="space-y-2 col-span-full">
+                                <Label>Códigos DANE Autorizados (Separados por coma)</Label>
+                                <Input name="daneCodes" defaultValue={isEditingUser?.daneCodes?.join(', ')} placeholder="123, 456, 789" />
                               </div>
                             </>
                           )}
                         </div>
                         <DialogFooter>
-                          <Button type="submit" className="gap-2"><Save className="h-4 w-4" /> Guardar</Button>
+                          <Button type="button" variant="ghost" onClick={() => setIsUserDialogOpen(false)}>Cancelar</Button>
+                          <Button type="submit" className="gap-2"><Save className="h-4 w-4" /> Guardar Usuario</Button>
                         </DialogFooter>
                         </form>
                       </DialogContent>
@@ -301,39 +324,52 @@ export default function DownloadsPage() {
               </CardHeader>
               <CardContent>
                 {isLoadingUsers ? (
-                  <div className="flex justify-center py-10"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
-                ) : (
+                  <div className="flex justify-center py-20"><Loader2 className="h-10 w-10 animate-spin text-primary" /></div>
+                ) : users.length > 0 ? (
                   <Table>
                     <TableHeader>
                       <TableRow>
                         <TableHead>Nombre</TableHead>
-                        <TableHead>Email</TableHead>
+                        <TableHead>Email / Usuario</TableHead>
                         <TableHead>Rol</TableHead>
-                        <TableHead>Institución / DANE</TableHead>
+                        <TableHead>Información Asociada</TableHead>
                         <TableHead className="text-right">Acciones</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {users.map((user) => (
                         <TableRow key={user.email}>
-                          <TableCell className="font-medium">{user.name}</TableCell>
-                          <TableCell>{user.email}</TableCell>
-                          <TableCell className="capitalize">{user.role}</TableCell>
-                          <TableCell className="text-xs">
-                            {user.role === 'rector' ? user.institution : `${user.daneCodes?.length || 0} Instituciones`}
+                          <TableCell className="font-semibold text-base">{user.name}</TableCell>
+                          <TableCell className="text-muted-foreground">{user.email}</TableCell>
+                          <TableCell>
+                             <span className={`px-2 py-1 rounded-full text-xs font-bold uppercase ${user.role === 'rector' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'}`}>
+                                {user.role === 'rector' ? 'Rector' : 'Director'}
+                             </span>
                           </TableCell>
-                          <TableCell className="text-right space-x-2">
-                            <Button size="icon" variant="ghost" onClick={() => { setIsEditingUser(user); setIsUserDialogOpen(true); }}>
-                              <Shield className="h-4 w-4 text-blue-500" />
-                            </Button>
-                            <Button size="icon" variant="ghost" onClick={() => handleDeleteUser(user.email)}>
-                              <Trash2 className="h-4 w-4 text-destructive" />
-                            </Button>
+                          <TableCell className="text-xs max-w-[200px] truncate">
+                            {user.role === 'rector' 
+                              ? `${user.institution || 'N/A'} (DANE: ${user.dane || 'N/A'})` 
+                              : `${user.daneCodes?.length || 0} Sedes asignadas`}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex justify-end gap-1">
+                                <Button size="icon" variant="ghost" title="Editar Usuario" onClick={() => { setIsEditingUser(user); setIsUserDialogOpen(true); }}>
+                                <Shield className="h-4 w-4 text-blue-500" />
+                                </Button>
+                                <Button size="icon" variant="ghost" title="Eliminar Usuario" onClick={() => handleDeleteUser(user.email)}>
+                                <Trash2 className="h-4 w-4 text-destructive" />
+                                </Button>
+                            </div>
                           </TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
                   </Table>
+                ) : (
+                  <div className="text-center py-20 border border-dashed rounded-lg bg-muted/20">
+                    <Users className="mx-auto h-12 w-12 text-muted-foreground opacity-50" />
+                    <p className="mt-4 text-muted-foreground font-medium">No hay usuarios registrados. Utilice el botón de Sincronización.</p>
+                  </div>
                 )}
               </CardContent>
             </Card>

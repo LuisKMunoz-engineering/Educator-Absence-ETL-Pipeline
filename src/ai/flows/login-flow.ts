@@ -42,17 +42,23 @@ const loginFlow = ai.defineFlow(
         }
 
         try {
+            await fs.access(USERS_FILE);
             const data = await fs.readFile(USERS_FILE, 'utf-8');
             const users = JSON.parse(data) as any[];
-            const user = users.find(u => u.email.toLowerCase() === email && u.password === password);
+            
+            // Búsqueda insensible a mayúsculas/minúsculas y espacios
+            const user = users.find(u => 
+                String(u.email).toLowerCase().trim() === email && 
+                String(u.password).trim() === password
+            );
 
             if (user) {
                 return { success: true, user };
             }
         } catch (e) {
-            console.error("Login flow storage error:", e);
+            console.error("Login flow storage error or file missing:", e);
         }
 
-        return { success: false, error: 'Credenciales inválidas.' };
+        return { success: false, error: 'Credenciales inválidas o el sistema de usuarios no ha sido inicializado por el Administrador.' };
     }
 );
