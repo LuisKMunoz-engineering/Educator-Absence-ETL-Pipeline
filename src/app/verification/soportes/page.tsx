@@ -1,10 +1,11 @@
 'use client';
 
 import { useRouter } from "next/navigation";
-import Image from "next/image";
 import { LogOut, ArrowLeft, ExternalLink, FileUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
+import { DynamicLogo } from "@/components/dynamic-logo";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 export default function SoportesPage() {
   const router = useRouter();
@@ -22,9 +23,10 @@ export default function SoportesPage() {
     <div className="min-h-screen bg-background text-foreground">
       <header className="p-4 flex justify-between items-center bg-card border-b sticky top-0 z-10 h-24">
         <div className="flex items-center">
-          <Image src="/EscudoSedCaucaB.png" alt="Escudo SED Cauca" width={80} height={80} />
+          <DynamicLogo width={80} height={80} />
         </div>
-        <div className="flex items-center">
+        <div className="flex items-center gap-4">
+          <ThemeToggle />
           <Button variant="ghost" size="sm" onClick={handleLogout}>
             <LogOut className="mr-2 h-4 w-4" />
             Cerrar Sesión
@@ -38,7 +40,7 @@ export default function SoportesPage() {
             <div className="mx-auto bg-primary/10 w-16 h-16 rounded-full flex items-center justify-center mb-4">
                 <FileUp className="h-8 w-8 text-primary" />
             </div>
-            <CardTitle className="text-2xl font-bold text-primary font-headline">Carga de Soportes de Ausentismo</CardTitle>
+            <CardTitle className="text-2xl font-bold text-primary font-headline">Carga de Soportes de Ausentismo Laboral</CardTitle>
             <CardDescription className="text-base mt-4 text-balance">
               A continuación deberá cargar los soportes del reporte de ausentismo consolidados de acuerdo a lo dispuesto por la SED-CAUCA para tal fin, por favor ingrese al siguiente enlace:
             </CardDescription>

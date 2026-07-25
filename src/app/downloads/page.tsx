@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import Image from "next/image";
 import { LogOut, Loader2, Download, List, RefreshCw, Users, Shield, Trash2, Plus, Save, FileSpreadsheet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -16,6 +15,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { DynamicLogo } from "@/components/dynamic-logo";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 export default function DownloadsPage() {
   const router = useRouter();
@@ -159,10 +160,11 @@ export default function DownloadsPage() {
     <div className="min-h-screen bg-background text-foreground">
       <header className="p-4 flex justify-between items-center bg-card border-b sticky top-0 z-10 h-24">
         <div className="flex items-center">
-          <Image src="/EscudoSedCaucaB.png" alt="Escudo SED Cauca" width={80} height={80} />
+          <DynamicLogo width={80} height={80} />
           <h2 className="ml-4 text-xl font-bold text-primary hidden md:block uppercase">Panel de Administración</h2>
         </div>
-        <div className="flex items-center">
+        <div className="flex items-center gap-4">
+          <ThemeToggle />
           <Button variant="ghost" size="sm" onClick={handleLogout}>
             <LogOut className="mr-2 h-4 w-4" />
             Cerrar Sesión

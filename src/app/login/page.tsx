@@ -8,8 +8,9 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { LogIn, Loader2 } from 'lucide-react';
-import Image from 'next/image';
 import { login } from '@/ai/flows/login-flow';
+import { DynamicLogo } from '@/components/dynamic-logo';
+import { ThemeToggle } from '@/components/theme-toggle';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -66,10 +67,13 @@ export default function LoginPage() {
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center bg-background p-4">
+      <div className="absolute top-4 right-4">
+        <ThemeToggle />
+      </div>
       <div className="w-full max-w-md">
         <Card className="shadow-2xl">
           <CardHeader className="text-center items-center">
-            <Image src="/EscudoSedCaucaB.png" alt="Escudo SED Cauca" width={256} height={256} className="mb-4" />
+            <DynamicLogo width={200} height={200} className="mb-4" />
             <CardTitle className="text-3xl font-headline text-primary">AppAusentismo</CardTitle>
             <CardDescription>Ingrese sus credenciales para continuar</CardDescription>
           </CardHeader>

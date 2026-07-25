@@ -17,7 +17,6 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Send, LogOut, Loader2, Upload, FileWarning, ClipboardCheck, ExternalLink } from "lucide-react";
-import Image from "next/image";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
@@ -28,6 +27,8 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { Checkbox } from "@/components/ui/checkbox";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
+import { DynamicLogo } from "@/components/dynamic-logo";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 const reportItemSchema = z.object({
   'DANE ESTABLECIMIENTO EDUCATIVO': z.string(),
@@ -312,9 +313,10 @@ export default function VerificationPage() {
     <div className="min-h-screen bg-background text-foreground">
       <header className="p-4 flex justify-between items-center bg-card border-b sticky top-0 z-10 h-24">
         <div className="flex items-center">
-          <Image src="/EscudoSedCaucaB.png" alt="Escudo SED Cauca" width={80} height={80} />
+          <DynamicLogo width={80} height={80} />
         </div>
-        <div className="flex items-center">
+        <div className="flex items-center gap-4">
+          <ThemeToggle />
           <Button variant="ghost" size="sm" onClick={handleLogout}>
             <LogOut className="mr-2 h-4 w-4" />
             Cerrar Sesión
