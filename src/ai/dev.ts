@@ -10,3 +10,4 @@ import '@/ai/flows/verify-reports-flow.ts';
 import '@/ai/flows/reject-report-flow.ts';
 import '@/ai/flows/user-management-flow.ts';
 import '@/ai/flows/login-flow.ts';
+import '@/ai/flows/settings-flow.ts';

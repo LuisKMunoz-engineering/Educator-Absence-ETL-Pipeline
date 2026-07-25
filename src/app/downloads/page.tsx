@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { LogOut, Loader2, Download, List, RefreshCw, Users, Shield, Trash2, Plus, Save, FileSpreadsheet } from "lucide-react";
+import { LogOut, Loader2, Download, List, RefreshCw, Users, Shield, Trash2, Plus, Save, FileSpreadsheet, CalendarClock, Lock, Unlock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -11,12 +11,15 @@ import { listReports } from "@/ai/flows/list-reports-flow";
 import { downloadReport, DownloadReportInput } from "@/ai/flows/download-report-flow";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getUsers, saveUser, deleteUser, syncFromExcel, User } from "@/ai/flows/user-management-flow";
+import { getAppSettings, updateAppSettings, AppSettings } from "@/ai/flows/settings-flow";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { DynamicLogo } from "@/components/dynamic-logo";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { Separator } from "@/components/ui/separator";
 
 export default function DownloadsPage() {
   const router = useRouter();
@@ -33,6 +36,11 @@ export default function DownloadsPage() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [isEditingUser, setIsEditingUser] = useState<User | null>(null);
   const [isUserDialogOpen, setIsUserDialogOpen] = useState(false);
+
+  // Settings State
+  const [settings, setSettings] = useState<AppSettings>({ rectorEnabled: true, directorEnabled: true });
+  const [isLoadingSettings, setIsLoadingSettings] = useState(true);
+  const [isUpdatingSettings, setIsUpdatingSettings] = useState(false);
 
   const fetchReports = async () => {
     setIsLoadingReports(true);
@@ -60,6 +68,18 @@ export default function DownloadsPage() {
     }
   };
 
+  const fetchSettings = async () => {
+    setIsLoadingSettings(true);
+    try {
+      const result = await getAppSettings();
+      setSettings(result);
+    } catch (error: any) {
+      console.error("Error fetching settings:", error);
+    } finally {
+      setIsLoadingSettings(false);
+    }
+  };
+
   const handleSyncUsers = async () => {
     setIsSyncing(true);
     try {
@@ -80,6 +100,7 @@ export default function DownloadsPage() {
   useEffect(() => {
     fetchReports();
     fetchUsers();
+    fetchSettings();
   }, []);
 
   const handleDownload = async (fileName: string) => {
@@ -143,6 +164,24 @@ export default function DownloadsPage() {
     }
   };
 
+  const handleToggleSettings = async (key: keyof AppSettings, value: boolean) => {
+    const newSettings = { ...settings, [key]: value };
+    setSettings(newSettings);
+    setIsUpdatingSettings(true);
+    try {
+        await updateAppSettings(newSettings);
+        toast({ 
+            title: "Configuración Actualizada", 
+            description: `Acceso para ${key === 'rectorEnabled' ? 'Rectores' : 'Directores'} ${value ? 'Habilitado' : 'Deshabilitado'}` 
+        });
+    } catch (error) {
+        toast({ variant: "destructive", title: "Error", description: "No se pudo actualizar la configuración." });
+        setSettings(settings); // Rollback UI
+    } finally {
+        setIsUpdatingSettings(false);
+    }
+  };
+
   const handleLogout = () => {
     localStorage.clear();
     router.push('/login');
@@ -173,210 +212,226 @@ export default function DownloadsPage() {
       </header>
 
       <main className="p-4 md:p-6 max-w-7xl mx-auto">
-        <Tabs defaultValue="reports" className="w-full">
-          <TabsList className="grid w-full grid-cols-2 mb-8 h-12">
-            <TabsTrigger value="reports" className="flex items-center gap-2 text-base">
-              <Download className="h-5 w-5" /> Reportes Consolidados
-            </TabsTrigger>
-            <TabsTrigger value="users" className="flex items-center gap-2 text-base">
-              <Users className="h-5 w-5" /> Gestión de Usuarios
-            </TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="reports">
-            <Card className="shadow-lg">
-              <CardHeader>
-                <div className="flex justify-between items-start">
-                  <div>
-                    <CardTitle className="text-2xl font-bold text-primary font-headline">Descarga de Reportes</CardTitle>
-                    <CardDescription>Visualice y descargue los archivos consolidados de ausentismo del mes.</CardDescription>
-                  </div>
-                  <Button variant="outline" size="icon" onClick={fetchReports} disabled={isLoadingReports}>
-                    <RefreshCw className={`h-4 w-4 ${isLoadingReports ? 'animate-spin' : ''}`} />
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent>
-                {isLoadingReports ? (
-                  <div className="flex justify-center py-20"><Loader2 className="h-10 w-10 animate-spin text-primary" /></div>
-                ) : reports.length > 0 ? (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Mes del Reporte</TableHead>
-                        <TableHead>Nombre del Archivo</TableHead>
-                        <TableHead className="text-right">Acciones</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {reports.map((name) => (
-                        <TableRow key={name}>
-                          <TableCell className="font-semibold capitalize text-base">{getFormattedMonth(name)}</TableCell>
-                          <TableCell className="text-muted-foreground">{name}</TableCell>
-                          <TableCell className="text-right">
-                            <Button size="sm" onClick={() => handleDownload(name)} disabled={downloadingFile === name}>
-                              {downloadingFile === name ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
-                              Descargar .xlsx
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                ) : (
-                  <div className="text-center py-20 border border-dashed rounded-lg bg-muted/20">
-                    <List className="mx-auto h-12 w-12 text-muted-foreground opacity-50" />
-                    <p className="mt-4 text-muted-foreground font-medium">No se encontraron archivos de reporte en el servidor.</p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="users">
-            <Card className="shadow-lg">
-              <CardHeader>
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                  <div>
-                    <CardTitle className="text-2xl font-bold text-primary font-headline">Gestión de Usuarios</CardTitle>
-                    <CardDescription>Administre las cuentas de Rectores y Directores de Núcleo que acceden al sistema.</CardDescription>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    <Button variant="outline" size="sm" onClick={handleSyncUsers} disabled={isSyncing} className="gap-2">
-                      <FileSpreadsheet className={`h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} />
-                      Sincronizar desde Excel
-                    </Button>
-                    <Button variant="outline" size="icon" onClick={fetchUsers} disabled={isLoadingUsers}>
-                      <RefreshCw className={`h-4 w-4 ${isLoadingUsers ? 'animate-spin' : ''}`} />
-                    </Button>
-                    
-                    <Dialog open={isUserDialogOpen} onOpenChange={(open) => { setIsUserDialogOpen(open); if(!open) setIsEditingUser(null); }}>
-                      <DialogTrigger asChild>
-                        <Button className="gap-2"><Plus className="h-4 w-4" /> Nuevo Usuario</Button>
-                      </DialogTrigger>
-                      <DialogContent className="max-w-2xl">
-                        <form onSubmit={handleSaveUser}>
-                        <DialogHeader>
-                          <DialogTitle className="text-xl font-bold text-primary">{isEditingUser ? 'Editar Usuario' : 'Crear Nuevo Usuario'}</DialogTitle>
-                          <DialogDescription>Ingrese los datos para la cuenta de acceso.</DialogDescription>
-                        </DialogHeader>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 py-6">
-                          <div className="space-y-2">
-                            <Label>Rol del Usuario</Label>
-                            <Select name="role" defaultValue={isEditingUser?.role || 'rector'} onValueChange={(v) => setIsEditingUser(prev => prev ? {...prev, role: v as any} : {role: v as any} as any)}>
-                              <SelectTrigger><SelectValue /></SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="rector">Rector / Director Rural</SelectItem>
-                                <SelectItem value="director">Director de Núcleo</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <div className="space-y-2">
-                            <Label>Nombre Completo</Label>
-                            <Input name="name" defaultValue={isEditingUser?.name} required placeholder="Nombre y Apellidos" />
-                          </div>
-                          <div className="space-y-2">
-                            <Label>Correo Electrónico (Usuario)</Label>
-                            <Input name="email" type="email" defaultValue={isEditingUser?.email} required placeholder="ejemplo@correo.com" />
-                          </div>
-                          <div className="space-y-2">
-                            <Label>Contraseña</Label>
-                            <Input name="password" type="text" defaultValue={isEditingUser?.password} required placeholder="Clave de acceso" />
-                          </div>
-                          
-                          {(isEditingUser?.role === 'rector' || !isEditingUser?.role) && (
-                            <>
-                              <div className="space-y-2">
-                                <Label>Código DANE</Label>
-                                <Input name="dane" defaultValue={isEditingUser?.dane} placeholder="1234567890" />
-                              </div>
-                              <div className="space-y-2">
-                                <Label>Establecimiento Educativo</Label>
-                                <Input name="institution" defaultValue={isEditingUser?.institution} placeholder="Nombre de la Institución" />
-                              </div>
-                              <div className="space-y-2 col-span-full">
-                                <Label>Municipio</Label>
-                                <Input name="municipality" defaultValue={isEditingUser?.municipality} placeholder="Nombre del Municipio" />
-                              </div>
-                            </>
-                          )}
-                          
-                          {isEditingUser?.role === 'director' && (
-                            <>
-                              <div className="space-y-2">
-                                <Label>Cédula de Ciudadanía</Label>
-                                <Input name="cedula" defaultValue={isEditingUser?.cedula} placeholder="Número de identificación" />
-                              </div>
-                              <div className="space-y-2 col-span-full">
-                                <Label>Códigos DANE Autorizados (Separados por coma)</Label>
-                                <Input name="daneCodes" defaultValue={isEditingUser?.daneCodes?.join(', ')} placeholder="123, 456, 789" />
-                              </div>
-                            </>
-                          )}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+            <Card className="lg:col-span-1 border-primary/20 shadow-md">
+                <CardHeader className="pb-3">
+                    <CardTitle className="text-xl font-bold flex items-center gap-2">
+                        <CalendarClock className="h-5 w-5 text-primary" />
+                        Control de Cronograma
+                    </CardTitle>
+                    <CardDescription>Active o desactive el acceso para reportes.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                    <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/30">
+                        <div className="space-y-0.5">
+                            <Label className="text-base font-semibold">Acceso Rectores</Label>
+                            <p className="text-xs text-muted-foreground flex items-center gap-1">
+                                {settings.rectorEnabled ? <Unlock className="h-3 w-3 text-green-500" /> : <Lock className="h-3 w-3 text-red-500" />}
+                                {settings.rectorEnabled ? 'Habilitado' : 'Bloqueado'}
+                            </p>
                         </div>
-                        <DialogFooter>
-                          <Button type="button" variant="ghost" onClick={() => setIsUserDialogOpen(false)}>Cancelar</Button>
-                          <Button type="submit" className="gap-2"><Save className="h-4 w-4" /> Guardar Usuario</Button>
-                        </DialogFooter>
-                        </form>
-                      </DialogContent>
-                    </Dialog>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent>
-                {isLoadingUsers ? (
-                  <div className="flex justify-center py-20"><Loader2 className="h-10 w-10 animate-spin text-primary" /></div>
-                ) : users.length > 0 ? (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Nombre</TableHead>
-                        <TableHead>Email / Usuario</TableHead>
-                        <TableHead>Rol</TableHead>
-                        <TableHead>Información Asociada</TableHead>
-                        <TableHead className="text-right">Acciones</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {users.map((user) => (
-                        <TableRow key={user.email}>
-                          <TableCell className="font-semibold text-base">{user.name}</TableCell>
-                          <TableCell className="text-muted-foreground">{user.email}</TableCell>
-                          <TableCell>
-                             <span className={`px-2 py-1 rounded-full text-xs font-bold uppercase ${user.role === 'rector' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'}`}>
-                                {user.role === 'rector' ? 'Rector' : 'Director'}
-                             </span>
-                          </TableCell>
-                          <TableCell className="text-xs max-w-[200px] truncate">
-                            {user.role === 'rector' 
-                              ? `${user.institution || 'N/A'} (DANE: ${user.dane || 'N/A'})` 
-                              : `${user.daneCodes?.length || 0} Sedes asignadas`}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <div className="flex justify-end gap-1">
-                                <Button size="icon" variant="ghost" title="Editar Usuario" onClick={() => { setIsEditingUser(user); setIsUserDialogOpen(true); }}>
-                                <Shield className="h-4 w-4 text-blue-500" />
-                                </Button>
-                                <Button size="icon" variant="ghost" title="Eliminar Usuario" onClick={() => handleDeleteUser(user.email)}>
-                                <Trash2 className="h-4 w-4 text-destructive" />
-                                </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                ) : (
-                  <div className="text-center py-20 border border-dashed rounded-lg bg-muted/20">
-                    <Users className="mx-auto h-12 w-12 text-muted-foreground opacity-50" />
-                    <p className="mt-4 text-muted-foreground font-medium">No hay usuarios registrados. Utilice el botón de Sincronización.</p>
-                  </div>
-                )}
-              </CardContent>
+                        <Switch 
+                            checked={settings.rectorEnabled} 
+                            onCheckedChange={(v) => handleToggleSettings('rectorEnabled', v)}
+                            disabled={isLoadingSettings || isUpdatingSettings}
+                        />
+                    </div>
+                    
+                    <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/30">
+                        <div className="space-y-0.5">
+                            <Label className="text-base font-semibold">Acceso Directores</Label>
+                            <p className="text-xs text-muted-foreground flex items-center gap-1">
+                                {settings.directorEnabled ? <Unlock className="h-3 w-3 text-green-500" /> : <Lock className="h-3 w-3 text-red-500" />}
+                                {settings.directorEnabled ? 'Habilitado' : 'Bloqueado'}
+                            </p>
+                        </div>
+                        <Switch 
+                            checked={settings.directorEnabled} 
+                            onCheckedChange={(v) => handleToggleSettings('directorEnabled', v)}
+                            disabled={isLoadingSettings || isUpdatingSettings}
+                        />
+                    </div>
+                    {isUpdatingSettings && <p className="text-[10px] text-center text-primary animate-pulse">Actualizando configuración global...</p>}
+                </CardContent>
             </Card>
-          </TabsContent>
-        </Tabs>
+
+            <div className="lg:col-span-2 space-y-6">
+                <Tabs defaultValue="reports" className="w-full">
+                <TabsList className="grid w-full grid-cols-2 mb-4 h-11">
+                    <TabsTrigger value="reports" className="flex items-center gap-2">
+                    <Download className="h-4 w-4" /> Reportes
+                    </TabsTrigger>
+                    <TabsTrigger value="users" className="flex items-center gap-2">
+                    <Users className="h-4 w-4" /> Usuarios
+                    </TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="reports">
+                    <Card className="shadow-lg">
+                    <CardHeader>
+                        <div className="flex justify-between items-start">
+                        <div>
+                            <CardTitle className="text-xl font-bold text-primary">Reportes Consolidados</CardTitle>
+                            <CardDescription>Archivos .xlsx generados por mes.</CardDescription>
+                        </div>
+                        <Button variant="outline" size="icon" onClick={fetchReports} disabled={isLoadingReports}>
+                            <RefreshCw className={`h-4 w-4 ${isLoadingReports ? 'animate-spin' : ''}`} />
+                        </Button>
+                        </div>
+                    </CardHeader>
+                    <CardContent>
+                        {isLoadingReports ? (
+                        <div className="flex justify-center py-10"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
+                        ) : reports.length > 0 ? (
+                        <Table>
+                            <TableHeader>
+                            <TableRow>
+                                <TableHead>Mes</TableHead>
+                                <TableHead className="text-right">Descargar</TableHead>
+                            </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                            {reports.map((name) => (
+                                <TableRow key={name}>
+                                <TableCell className="font-semibold capitalize">{getFormattedMonth(name)}</TableCell>
+                                <TableCell className="text-right">
+                                    <Button size="sm" variant="ghost" onClick={() => handleDownload(name)} disabled={downloadingFile === name}>
+                                    {downloadingFile === name ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                                    </Button>
+                                </TableCell>
+                                </TableRow>
+                            ))}
+                            </TableBody>
+                        </Table>
+                        ) : (
+                        <div className="text-center py-10 border border-dashed rounded-lg bg-muted/20">
+                            <p className="text-muted-foreground text-sm">No hay reportes disponibles.</p>
+                        </div>
+                        )}
+                    </CardContent>
+                    </Card>
+                </TabsContent>
+
+                <TabsContent value="users">
+                    <Card className="shadow-lg">
+                    <CardHeader>
+                        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                        <div>
+                            <CardTitle className="text-xl font-bold text-primary">Directorio de Usuarios</CardTitle>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                            <Button variant="outline" size="sm" onClick={handleSyncUsers} disabled={isSyncing} className="gap-2">
+                            <FileSpreadsheet className={`h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} />
+                            Sync
+                            </Button>
+                            
+                            <Dialog open={isUserDialogOpen} onOpenChange={(open) => { setIsUserDialogOpen(open); if(!open) setIsEditingUser(null); }}>
+                            <DialogTrigger asChild>
+                                <Button size="sm" className="gap-2"><Plus className="h-4 w-4" /> Nuevo</Button>
+                            </DialogTrigger>
+                            <DialogContent className="max-w-2xl">
+                                <form onSubmit={handleSaveUser}>
+                                <DialogHeader>
+                                <DialogTitle className="text-xl font-bold text-primary">{isEditingUser ? 'Editar Usuario' : 'Crear Usuario'}</DialogTitle>
+                                </DialogHeader>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 py-6">
+                                <div className="space-y-2">
+                                    <Label>Rol</Label>
+                                    <Select name="role" defaultValue={isEditingUser?.role || 'rector'} onValueChange={(v) => setIsEditingUser(prev => prev ? {...prev, role: v as any} : {role: v as any} as any)}>
+                                    <SelectTrigger><SelectValue /></SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="rector">Rector</SelectItem>
+                                        <SelectItem value="director">Director de Núcleo</SelectItem>
+                                    </SelectContent>
+                                    </Select>
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>Nombre</Label>
+                                    <Input name="name" defaultValue={isEditingUser?.name} required />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>Email</Label>
+                                    <Input name="email" type="email" defaultValue={isEditingUser?.email} required />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>Contraseña</Label>
+                                    <Input name="password" type="text" defaultValue={isEditingUser?.password} required />
+                                </div>
+                                
+                                {(isEditingUser?.role === 'rector' || !isEditingUser?.role) && (
+                                    <>
+                                    <div className="space-y-2">
+                                        <Label>Código DANE</Label>
+                                        <Input name="dane" defaultValue={isEditingUser?.dane} />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label>Institución</Label>
+                                        <Input name="institution" defaultValue={isEditingUser?.institution} />
+                                    </div>
+                                    </>
+                                )}
+                                
+                                {isEditingUser?.role === 'director' && (
+                                    <div className="space-y-2 col-span-full">
+                                        <Label>DANE Autorizados (Comas)</Label>
+                                        <Input name="daneCodes" defaultValue={isEditingUser?.daneCodes?.join(', ')} />
+                                    </div>
+                                )}
+                                </div>
+                                <DialogFooter>
+                                <Button type="submit" className="w-full">Guardar Cambios</Button>
+                                </DialogFooter>
+                                </form>
+                            </DialogContent>
+                            </Dialog>
+                        </div>
+                        </div>
+                    </CardHeader>
+                    <CardContent>
+                        {isLoadingUsers ? (
+                        <div className="flex justify-center py-10"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
+                        ) : (
+                        <Table>
+                            <TableHeader>
+                            <TableRow>
+                                <TableHead>Nombre / Email</TableHead>
+                                <TableHead>Rol</TableHead>
+                                <TableHead className="text-right">Acciones</TableHead>
+                            </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                            {users.map((user) => (
+                                <TableRow key={user.email}>
+                                <TableCell>
+                                    <div className="font-semibold text-sm">{user.name}</div>
+                                    <div className="text-xs text-muted-foreground">{user.email}</div>
+                                </TableCell>
+                                <TableCell>
+                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${user.role === 'rector' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'}`}>
+                                        {user.role}
+                                    </span>
+                                </TableCell>
+                                <TableCell className="text-right">
+                                    <div className="flex justify-end gap-1">
+                                        <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => { setIsEditingUser(user); setIsUserDialogOpen(true); }}>
+                                            <Shield className="h-3 w-3 text-blue-500" />
+                                        </Button>
+                                        <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleDeleteUser(user.email)}>
+                                            <Trash2 className="h-3 w-3 text-destructive" />
+                                        </Button>
+                                    </div>
+                                </TableCell>
+                                </TableRow>
+                            ))}
+                            </TableBody>
+                        </Table>
+                        )}
+                    </CardContent>
+                    </Card>
+                </TabsContent>
+                </Tabs>
+            </div>
+        </div>
       </main>
     </div>
   );
