@@ -2,13 +2,14 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { LogOut, Loader2, Download, List, RefreshCw, Users, Shield, Trash2, Plus, Save, FileSpreadsheet, CalendarClock, Lock, Unlock } from "lucide-react";
+import { LogOut, Loader2, Download, List, RefreshCw, Users, Shield, Trash2, Plus, Save, FileSpreadsheet, CalendarClock, Lock, Unlock, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { listReports } from "@/ai/flows/list-reports-flow";
 import { downloadReport, DownloadReportInput } from "@/ai/flows/download-report-flow";
+import { deleteReport } from "@/ai/flows/delete-report-flow";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getUsers, saveUser, deleteUser, syncFromExcel, User } from "@/ai/flows/user-management-flow";
 import { getAppSettings, updateAppSettings, AppSettings } from "@/ai/flows/settings-flow";
@@ -20,6 +21,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { DynamicLogo } from "@/components/dynamic-logo";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Separator } from "@/components/ui/separator";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 
 export default function DownloadsPage() {
   const router = useRouter();
@@ -29,6 +31,7 @@ export default function DownloadsPage() {
   const [reports, setReports] = useState<string[]>([]);
   const [isLoadingReports, setIsLoadingReports] = useState(true);
   const [downloadingFile, setDownloadingFile] = useState<string | null>(null);
+  const [deletingFile, setDeletingFile] = useState<string | null>(null);
 
   // Users State
   const [users, setUsers] = useState<User[]>([]);
@@ -122,6 +125,23 @@ export default function DownloadsPage() {
       toast({ variant: "destructive", title: "Error de Descarga", description: error.message });
     } finally {
       setDownloadingFile(null);
+    }
+  };
+
+  const handleDeleteReport = async (fileName: string) => {
+    setDeletingFile(fileName);
+    try {
+      const result = await deleteReport({ fileName });
+      if (result.success) {
+        toast({ title: "Reporte Eliminado", description: `El archivo ${fileName} ha sido eliminado permanentemente.` });
+        fetchReports();
+      } else {
+        throw new Error(result.error);
+      }
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Error al Eliminar", description: error.message });
+    } finally {
+      setDeletingFile(null);
     }
   };
 
@@ -259,10 +279,10 @@ export default function DownloadsPage() {
                 <Tabs defaultValue="reports" className="w-full">
                 <TabsList className="grid w-full grid-cols-2 mb-4 h-11">
                     <TabsTrigger value="reports" className="flex items-center gap-2">
-                    <Download className="h-4 w-4" /> Reportes
+                    <Download className="h-4 w-4" /> Descarga de Reportes
                     </TabsTrigger>
                     <TabsTrigger value="users" className="flex items-center gap-2">
-                    <Users className="h-4 w-4" /> Usuarios
+                    <Users className="h-4 w-4" /> Gestión de Usuarios
                     </TabsTrigger>
                 </TabsList>
 
@@ -287,7 +307,7 @@ export default function DownloadsPage() {
                             <TableHeader>
                             <TableRow>
                                 <TableHead>Mes</TableHead>
-                                <TableHead className="text-right">Descargar</TableHead>
+                                <TableHead className="text-right">Acciones</TableHead>
                             </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -295,9 +315,36 @@ export default function DownloadsPage() {
                                 <TableRow key={name}>
                                 <TableCell className="font-semibold capitalize">{getFormattedMonth(name)}</TableCell>
                                 <TableCell className="text-right">
-                                    <Button size="sm" variant="ghost" onClick={() => handleDownload(name)} disabled={downloadingFile === name}>
-                                    {downloadingFile === name ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-                                    </Button>
+                                    <div className="flex justify-end gap-2">
+                                        <Button size="sm" variant="ghost" onClick={() => handleDownload(name)} disabled={downloadingFile === name}>
+                                            {downloadingFile === name ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4 text-primary" />}
+                                        </Button>
+
+                                        <AlertDialog>
+                                            <AlertDialogTrigger asChild>
+                                                <Button size="sm" variant="ghost" disabled={deletingFile === name} className="hover:bg-destructive/10">
+                                                    {deletingFile === name ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4 text-destructive" />}
+                                                </Button>
+                                            </AlertDialogTrigger>
+                                            <AlertDialogContent>
+                                                <AlertDialogHeader>
+                                                    <AlertDialogTitle className="flex items-center gap-2">
+                                                        <AlertTriangle className="h-5 w-5 text-destructive" />
+                                                        ¿Eliminar Reporte Permanente?
+                                                    </AlertDialogTitle>
+                                                    <AlertDialogDescription>
+                                                        Esta acción eliminará físicamente el archivo <span className="font-bold">{name}</span> del servidor. Esta acción no se puede deshacer.
+                                                    </AlertDialogDescription>
+                                                </AlertDialogHeader>
+                                                <AlertDialogFooter>
+                                                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                                    <AlertDialogAction onClick={() => handleDeleteReport(name)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                                                        Eliminar Reporte
+                                                    </AlertDialogAction>
+                                                </AlertDialogFooter>
+                                            </AlertDialogContent>
+                                        </AlertDialog>
+                                    </div>
                                 </TableCell>
                                 </TableRow>
                             ))}
@@ -322,7 +369,7 @@ export default function DownloadsPage() {
                         <div className="flex flex-wrap gap-2">
                             <Button variant="outline" size="sm" onClick={handleSyncUsers} disabled={isSyncing} className="gap-2">
                             <FileSpreadsheet className={`h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} />
-                            Sync
+                            SincronizarBD
                             </Button>
                             
                             <Dialog open={isUserDialogOpen} onOpenChange={(open) => { setIsUserDialogOpen(open); if(!open) setIsEditingUser(null); }}>
