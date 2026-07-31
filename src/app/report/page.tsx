@@ -16,7 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { PlusCircle, Send, LogOut, Loader2, Trash2, Upload } from "lucide-react";
+import { PlusCircle, Send, LogOut, Loader2, Trash2, Upload, Plus } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -100,7 +100,7 @@ export default function ReportPage() {
     }
   }, [form]);
 
-  const { fields, append, remove, replace } = useFieldArray({
+  const { fields, append, remove, replace, insert } = useFieldArray({
     control: form.control,
     name: "reports",
   });
@@ -110,6 +110,7 @@ export default function ReportPage() {
 
   const absenteeismChoice = form.watch('absenteeismChoice');
   const monthValue = form.watch('month');
+  const watchedReports = form.watch('reports');
 
   const { dateRange, finalDateRange } = useMemo(() => {
     if (!monthValue) return { dateRange: undefined, finalDateRange: undefined };
@@ -207,6 +208,31 @@ export default function ReportPage() {
         console.error("Error al buscar la cédula:", error);
     }
   }
+
+  const handleAddNovelty = (index: number) => {
+    const person = watchedReports[index];
+    insert(index + 1, {
+      cedula: person.cedula,
+      nombreCompleto: person.nombreCompleto,
+      cargoActual: person.cargoActual,
+      fechaInicio: '',
+      fechaFinal: '',
+      fechaAusenciaUnDia: '',
+      horaInicio: '',
+      horaFinal: '',
+      fechaSolicitudPermiso: '',
+      fechaAutorizacionPermiso: '',
+      motivoPermiso: 'No Justificada',
+      observaciones: '',
+      isManual: person.isManual,
+    });
+  };
+
+  const isLastOccurrence = (cedula: string, currentIndex: number) => {
+    if (!cedula) return false;
+    const lastIndex = watchedReports.map(r => r.cedula).lastIndexOf(cedula);
+    return lastIndex === currentIndex;
+  };
 
   function onSubmit(data: FormValues) {
     let reportsToSend: z.infer<typeof reportItemSchema>[] = [];
@@ -376,7 +402,7 @@ export default function ReportPage() {
                               <TableHead>Fecha Autorización</TableHead>
                               <TableHead>Motivo</TableHead>
                               <TableHead>Observaciones</TableHead>
-                              <TableHead className="w-[50px]"></TableHead>
+                              <TableHead className="w-[120px] text-center">Acciones</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
@@ -390,6 +416,8 @@ export default function ReportPage() {
                               const disableSingle = !!(fechaInicioV || fechaFinalV);
                               const fechaSolV = form.watch(`reports.${index}.fechaSolicitudPermiso`);
                               const motivosPermitidos = fechaSolV ? motivosDePermiso : motivosDePermisoSinSolicitud;
+                              
+                              const showAddNovelty = isLastOccurrence(field.cedula, index);
 
                               return (
                                 <TableRow key={field.id}>
@@ -446,7 +474,25 @@ export default function ReportPage() {
                                       )} />
                                   </TableCell>
                                   <TableCell><FormField control={form.control} name={`reports.${index}.observaciones`} render={({ field }) => (<Textarea {...field} />)}/></TableCell>
-                                  <TableCell><Button type="button" variant="ghost" size="icon" onClick={() => remove(index)}><Trash2 className="h-4 w-4 text-destructive" /></Button></TableCell>
+                                  <TableCell>
+                                    <div className="flex items-center gap-2 justify-center w-[120px]">
+                                      {showAddNovelty && (
+                                        <Button 
+                                          type="button" 
+                                          variant="outline" 
+                                          size="icon" 
+                                          className="h-8 w-8 text-primary border-primary hover:bg-primary/10"
+                                          onClick={() => handleAddNovelty(index)}
+                                          title="Agregar otra novedad para esta persona"
+                                        >
+                                          <Plus className="h-4 w-4" />
+                                        </Button>
+                                      )}
+                                      <Button type="button" variant="ghost" size="icon" className="h-8 w-8" onClick={() => remove(index)}>
+                                        <Trash2 className="h-4 w-4 text-destructive" />
+                                      </Button>
+                                    </div>
+                                  </TableCell>
                                 </TableRow>
                               );
                             })}
@@ -455,7 +501,7 @@ export default function ReportPage() {
                       </div>
 
                       <Button type="button" variant="outline" className="mt-6 border-dashed" onClick={() => append({ cedula: '', nombreCompleto: '', cargoActual: '', fechaInicio: '', fechaFinal: '', fechaAusenciaUnDia: '', horaInicio: '', horaFinal: '', fechaSolicitudPermiso: '', fechaAutorizacionPermiso: '', motivoPermiso: 'No Justificada', observaciones: '', isManual: true })}>
-                          <PlusCircle className="mr-2 h-4 w-4" /> Agregar Fila Manualmente
+                          <PlusCircle className="mr-2 h-4 w-4" /> Agregar Persona Manualmente
                       </Button>
                       {form.formState.errors.reports?.root && ( <p className="text-sm font-medium text-destructive mt-2">{form.formState.errors.reports.root.message}</p> )}
                     </CardContent>
