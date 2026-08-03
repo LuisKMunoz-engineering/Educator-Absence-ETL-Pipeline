@@ -20,9 +20,9 @@ import { Send, LogOut, Loader2, Upload, FileWarning, ClipboardCheck, ExternalLin
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
-import { getReportsForVerification, GetReportsForVerificationInput } from "@/ai/flows/get-reports-for-verification-flow";
-import { verifyReports, VerifyReportsInput } from "@/ai/flows/verify-reports-flow";
-import { rejectReport, RejectReportInput } from "@/ai/flows/reject-report-flow";
+import { getReportsForVerification } from "@/ai/flows/get-reports-for-verification-flow";
+import { verifyReports } from "@/ai/flows/verify-reports-flow";
+import { rejectReport } from "@/ai/flows/reject-report-flow";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Checkbox } from "@/components/ui/checkbox";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
@@ -140,7 +140,7 @@ export default function VerificationPage() {
     setIsRejectionLoading(rejectionTarget.daneCode);
 
     try {
-        const input: RejectReportInput = {
+        const input = {
             month: month,
             daneCode: rejectionTarget.daneCode,
             observation: rejectionObservation.trim(),
@@ -300,28 +300,52 @@ export default function VerificationPage() {
                           </div>
                         </AccordionTrigger>
                         <AccordionContent>
-                          <Table>
-                            <TableHeader>
-                              <TableRow>
-                                <TableHead>Cédula</TableHead>
-                                <TableHead>Nombre</TableHead>
-                                <TableHead>Cargo</TableHead>
-                                <TableHead>Estado</TableHead>
-                                <TableHead>Verificado</TableHead>
-                              </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                              {group.reports.map((r, ridx) => (
-                                <TableRow key={ridx}>
-                                  <TableCell>{r['Cédula']}</TableCell>
-                                  <TableCell>{r['Nombre Completo']}</TableCell>
-                                  <TableCell>{r['Cargo Actual']}</TableCell>
-                                  <TableCell>{r['Estado del Reporte']}</TableCell>
-                                  <TableCell>{r['Verificado'] || 'Pendiente'}</TableCell>
+                          <div className="w-full overflow-x-auto">
+                            <Table>
+                              <TableHeader>
+                                <TableRow>
+                                  <TableHead className="whitespace-nowrap">Cédula</TableHead>
+                                  <TableHead className="whitespace-nowrap">Nombre Completo</TableHead>
+                                  <TableHead className="whitespace-nowrap">Cargo Actual</TableHead>
+                                  <TableHead className="whitespace-nowrap">Fecha Inicio</TableHead>
+                                  <TableHead className="whitespace-nowrap">Fecha Final</TableHead>
+                                  <TableHead className="whitespace-nowrap">Ausencia &lt; 1 día</TableHead>
+                                  <TableHead className="whitespace-nowrap">H. Inicio</TableHead>
+                                  <TableHead className="whitespace-nowrap">H. Final</TableHead>
+                                  <TableHead className="whitespace-nowrap">F. Solicitud</TableHead>
+                                  <TableHead className="whitespace-nowrap">F. Autorización</TableHead>
+                                  <TableHead className="whitespace-nowrap">Motivo</TableHead>
+                                  <TableHead className="whitespace-nowrap">Observaciones</TableHead>
+                                  <TableHead className="whitespace-nowrap">Estado</TableHead>
+                                  <TableHead className="whitespace-nowrap">Verificado</TableHead>
                                 </TableRow>
-                              ))}
-                            </TableBody>
-                          </Table>
+                              </TableHeader>
+                              <TableBody>
+                                {group.reports.map((r, ridx) => (
+                                  <TableRow key={ridx}>
+                                    <TableCell className="font-medium">{r['Cédula']}</TableCell>
+                                    <TableCell className="whitespace-nowrap">{r['Nombre Completo']}</TableCell>
+                                    <TableCell className="whitespace-nowrap">{r['Cargo Actual']}</TableCell>
+                                    <TableCell className="whitespace-nowrap">{r['Fecha Inicio']}</TableCell>
+                                    <TableCell className="whitespace-nowrap">{r['Fecha Final']}</TableCell>
+                                    <TableCell className="whitespace-nowrap">{r['Fecha Ausencia menos de un día']}</TableCell>
+                                    <TableCell>{r['Hora Inicio']}</TableCell>
+                                    <TableCell>{r['Hora Final']}</TableCell>
+                                    <TableCell className="whitespace-nowrap">{r['Fecha Solicitud Permiso']}</TableCell>
+                                    <TableCell className="whitespace-nowrap">{r['Fecha Autorización Permiso']}</TableCell>
+                                    <TableCell className="whitespace-nowrap">{r['Motivo de Permiso']}</TableCell>
+                                    <TableCell className="max-w-xs truncate" title={r['Observaciones']}>{r['Observaciones']}</TableCell>
+                                    <TableCell>
+                                      <Badge variant={r['Estado del Reporte'] === 'Rechazado para corrección' ? 'destructive' : r['Estado del Reporte'] === 'Verificado' ? 'default' : 'secondary'}>
+                                        {r['Estado del Reporte']}
+                                      </Badge>
+                                    </TableCell>
+                                    <TableCell className="text-xs whitespace-nowrap">{r['Verificado'] || 'Pendiente'}</TableCell>
+                                  </TableRow>
+                                ))}
+                              </TableBody>
+                            </Table>
+                          </div>
                         </AccordionContent>
                       </AccordionItem>
                     ))}
