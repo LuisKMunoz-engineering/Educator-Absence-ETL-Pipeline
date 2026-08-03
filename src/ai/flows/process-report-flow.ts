@@ -35,7 +35,7 @@ const parseDateValue = (value?: any): Date | undefined => {
     if (!value) return undefined;
     if (value instanceof Date) return value;
     
-    // If it's a serial number from Excel (unlikely with raw:false but possible)
+    // If it's a serial number from Excel
     if (typeof value === 'number') {
         const date = XLSX.SSF.parse_date_code(value);
         return new Date(date.y, date.m - 1, date.d, 12, 0, 0);
@@ -148,7 +148,7 @@ const processReportFlow = ai.defineFlow(
                         cargoActual: String(row['Cargo Actual'] || ''),
                         fechaInicio: formatDateForInput(row['Fecha Inicio']),
                         fechaFinal: formatDateForInput(row['Fecha Final']),
-                        fechaAusencia menos de un día: formatDateForInput(row['Fecha Ausencia menos de un día']),
+                        fechaAusenciaUnDia: formatDateForInput(row['Fecha Ausencia menos de un día']),
                         horaInicio: row['Hora Inicio'] || '',
                         horaFinal: row['Hora Final'] || '',
                         fechaSolicitudPermiso: formatDateForInput(row['Fecha Solicitud Permiso']),
@@ -198,7 +198,7 @@ const processReportFlow = ai.defineFlow(
             const workbook = XLSX.utils.book_new();
             const sheet = XLSX.utils.json_to_sheet(finalData, { cellDates: true });
             
-            // Auto-adjust column widths
+            // Auto-adjust column widths for Excel
             autoAdjustColumns(sheet, finalData);
             
             XLSX.utils.book_append_sheet(workbook, sheet, `Reporte ${input.month}`);
