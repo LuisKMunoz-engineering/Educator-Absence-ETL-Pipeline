@@ -16,7 +16,8 @@ const VerifyReportsInputSchema = z.object({
 });
 
 export async function verifyReports(input: z.infer<typeof VerifyReportsInputSchema>) {
-    return verifyReportsFlow(input);
+    const result = await verifyReportsFlow(input);
+    return JSON.parse(JSON.stringify(result));
 }
 
 const verifyReportsFlow = ai.defineFlow(
@@ -28,7 +29,7 @@ const verifyReportsFlow = ai.defineFlow(
             
             const filePath = path.join(reportsDir, `Ausentismo_${input.month}.xlsx`);
             const fileBuffer = await fs.readFile(filePath);
-            const workbook = XLSX.read(fileBuffer, { type: 'buffer' });
+            const workbook = XLSX.read(fileBuffer, { type: 'buffer', cellDates: true });
             const existingData: any[] = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { raw: false });
             
             const now = new Date();

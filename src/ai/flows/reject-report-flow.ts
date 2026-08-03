@@ -17,7 +17,8 @@ const RejectReportInputSchema = z.object({
 });
 
 export async function rejectReport(input: z.infer<typeof RejectReportInputSchema>) {
-    return rejectReportFlow(input);
+    const result = await rejectReportFlow(input);
+    return JSON.parse(JSON.stringify(result));
 }
 
 const rejectReportFlow = ai.defineFlow(
@@ -29,7 +30,7 @@ const rejectReportFlow = ai.defineFlow(
             
             const filePath = path.join(reportsDir, `Ausentismo_${input.month}.xlsx`);
             const fileBuffer = await fs.readFile(filePath);
-            const workbook = XLSX.read(fileBuffer, { type: 'buffer' });
+            const workbook = XLSX.read(fileBuffer, { type: 'buffer', cellDates: true });
             const existingData: any[] = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { raw: false });
             
             const updatedData = existingData.map(row => {

@@ -98,7 +98,8 @@ const ProcessReportInputSchema = z.object({
 });
 
 export async function processReport(input: z.infer<typeof ProcessReportInputSchema>) {
-    return processReportFlow(input);
+    const result = await processReportFlow(input);
+    return JSON.parse(JSON.stringify(result));
 }
 
 const processReportFlow = ai.defineFlow(
@@ -113,7 +114,7 @@ const processReportFlow = ai.defineFlow(
             try {
                 const fileBuffer = await fs.readFile(filePath);
                 const workbook = XLSX.read(fileBuffer, { type: 'buffer', cellDates: true });
-                existingData = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { raw: true });
+                existingData = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { raw: false });
             } catch (e) {}
 
             const institutionRecords = existingData.filter(row => String(row['DANE ESTABLECIMIENTO EDUCATIVO']) === String(input.daneNumber));
@@ -137,13 +138,13 @@ const processReportFlow = ai.defineFlow(
                         observaciones: row['Observaciones'] || '',
                         isManual: true,
                     }));
-                    return JSON.parse(JSON.stringify({ 
+                    return { 
                         success: true, 
                         reportExists: false, 
                         isRejected: true, 
                         rejectionObservation: firstRowWithObs ? String(firstRowWithObs['Observación del Director']) : 'Reporte rechazado.', 
                         existingReports: mappedReports 
-                    }));
+                    };
                 }
                 return { success: true, reportExists: institutionRecords.length > 0 };
             }
