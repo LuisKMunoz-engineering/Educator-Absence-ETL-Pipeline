@@ -536,12 +536,14 @@ export default function ReportPage() {
                 <AlertCircle className="mr-2 h-6 w-6" />
                 Atención: Reporte con Observaciones
               </AlertDialogTitle>
-              <AlertDialogDescription className="text-base text-foreground">
-                <p className="mb-4">El Director de Núcleo ha rechazado su reporte con la siguiente observación:</p>
-                <div className="p-4 bg-destructive/10 border-l-4 border-destructive rounded italic mb-6">
-                  "{rejectionObservation}"
+              <AlertDialogDescription className="text-base text-foreground" asChild>
+                <div>
+                  <p className="mb-4">El Director de Núcleo ha rechazado su reporte con la siguiente observación:</p>
+                  <div className="p-4 bg-destructive/10 border-l-4 border-destructive rounded italic mb-6">
+                    "{rejectionObservation}"
+                  </div>
+                  <p className="font-bold text-primary mb-4">Según las observaciones de la Dirección de núcleo, seleccione la acción a realizar:</p>
                 </div>
-                <p className="font-bold text-primary mb-4">Según las observaciones de la Dirección de núcleo, seleccione la acción a realizar:</p>
               </AlertDialogDescription>
             </AlertDialogHeader>
             <div className="grid grid-cols-1 gap-3 py-4">
