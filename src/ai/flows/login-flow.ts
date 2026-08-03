@@ -1,16 +1,12 @@
 'use server';
 /**
- * @fileOverview Flow to handle login validation against Firestore and app settings.
- * Includes hardcoded credentials for the initial admin access.
+ * @fileOverview Flow to handle login validation against local users.json.
  */
 
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
-import { db } from '@/lib/firebase-admin';
-import { getAppSettings } from './settings-flow';
-
-const ADMIN_EMAIL = 'admin';
-const ADMIN_PASSWORD = '12345';
+import fs from 'fs/promises';
+import path from 'path';
 
 const LoginInputSchema = z.object({
     email: z.string(),
@@ -33,44 +29,29 @@ const loginFlow = ai.defineFlow(
         const email = (input.email || '').trim().toLowerCase();
         const password = (input.password || '').trim();
 
-        // 1. Verificación Prioritaria de Administrador (Hardcoded)
-        if (email === ADMIN_EMAIL && password === ADMIN_PASSWORD) {
-            console.log("Admin login detected");
+        // Admin Hardcoded
+        if (email === 'admin' && password === '12345') {
             return {
                 success: true,
-                user: { role: 'admin', email: ADMIN_EMAIL, name: 'Administrador' }
+                user: { role: 'admin', email: 'admin', name: 'Administrador' }
             };
         }
 
-        // 2. Verificación de Usuarios en Firestore
         try {
-            const userDoc = await db.collection('users').doc(email).get();
+            const usersPath = path.join(process.cwd(), 'storage', 'users.json');
+            const fileContent = await fs.readFile(usersPath, 'utf-8');
+            const users = JSON.parse(fileContent);
             
-            if (!userDoc.exists) {
-                return { success: false, error: 'Usuario no encontrado. Verifique sus credenciales.' };
-            }
+            const user = users.find((u: any) => u.email.toLowerCase() === email && String(u.password) === password);
 
-            const user = userDoc.data();
-            if (!user || String(user.password).trim() !== password) {
-                return { success: false, error: 'Contraseña incorrecta.' };
-            }
-
-            // 3. Verificación de Cronograma (Settings)
-            // Solo se consulta si no es admin
-            const settings = await getAppSettings();
-            
-            if (user.role === 'rector' && settings.rectorEnabled === false) {
-                return { success: false, error: 'El acceso para Rectores está cerrado según el cronograma.' };
-            }
-            if (user.role === 'director' && settings.directorEnabled === false) {
-                return { success: false, error: 'El acceso para Directores está cerrado según el cronograma.' };
+            if (!user) {
+                return { success: false, error: 'Usuario o contraseña incorrectos.' };
             }
 
             return { success: true, user };
-
-        } catch (e: any) {
-            console.error("Login flow error:", e);
-            return { success: false, error: 'Error de conexión con la base de datos. Intente nuevamente.' };
+        } catch (e) {
+            console.error("Login error:", e);
+            return { success: false, error: 'Error al validar credenciales.' };
         }
     }
 );

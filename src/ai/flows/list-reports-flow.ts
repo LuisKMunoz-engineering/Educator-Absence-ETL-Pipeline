@@ -1,37 +1,15 @@
-
 'use server';
-/**
- * @fileOverview A flow to list report files from Firebase Storage.
- */
-
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
-import { storage } from '@/lib/firebase-admin';
+import fs from 'fs/promises';
+import path from 'path';
 
-const ListReportsOutputSchema = z.object({
-    success: z.boolean(),
-    reports: z.array(z.string()).optional(),
-    error: z.string().optional(),
-});
-
-export async function listReports(): Promise<z.infer<typeof ListReportsOutputSchema>> {
-    return listReportsFlow();
-}
-
-const listReportsFlow = ai.defineFlow(
-    { name: 'listReportsFlow', outputSchema: ListReportsOutputSchema },
-    async () => {
-        try {
-            const [files] = await storage.bucket().getFiles({ prefix: 'reports/' });
-            const reportNames = files
-                .map(file => file.name.replace('reports/', ''))
-                .filter(name => name.endsWith('.xlsx'))
-                .sort((a, b) => b.localeCompare(a));
-
-            return { success: true, reports: reportNames };
-        } catch (error: any) {
-            console.error("Error listing reports from Storage:", error);
-            return { success: false, error: error.message };
-        }
+export async function listReports() {
+    const reportsDir = path.join(process.cwd(), 'storage', 'reports');
+    try {
+        const files = await fs.readdir(reportsDir);
+        return { success: true, reports: files.filter(f => f.endsWith('.xlsx')) };
+    } catch (e) {
+        return { success: true, reports: [] };
     }
-);
+}
