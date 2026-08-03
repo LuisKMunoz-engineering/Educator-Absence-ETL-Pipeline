@@ -21,16 +21,25 @@ export default function LoginPage() {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!email || !password) return;
+    
     setIsLoading(true);
 
     try {
       const result = await login({ email, password });
 
       if (result.success && result.user) {
+        // Almacenar datos de sesión localmente
         localStorage.setItem('isAuthenticated', 'true');
         localStorage.setItem('userRole', result.user.role);
         localStorage.setItem('userName', result.user.name);
         
+        toast({
+          title: "Inicio de sesión exitoso",
+          description: `Bienvenido, ${result.user.name}`,
+        });
+
+        // Redirección basada en el rol
         if (result.user.role === 'admin') {
           router.push('/downloads');
         } else if (result.user.role === 'rector') {
@@ -49,16 +58,16 @@ export default function LoginPage() {
 
       toast({
         variant: 'destructive',
-        title: 'Error de autenticación',
+        title: 'Fallo al ingresar',
         description: result.error || 'Correo o contraseña incorrectos.',
       });
 
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error durante el login:", error);
       toast({
         variant: 'destructive',
-        title: 'Error de Sistema',
-        description: 'No se pudo procesar el inicio de sesión.',
+        title: 'Error de Comunicación',
+        description: 'No se pudo contactar con el servidor. Verifique su conexión.',
       });
     } finally {
       setIsLoading(false);
@@ -71,25 +80,26 @@ export default function LoginPage() {
         <ThemeToggle />
       </div>
       <div className="w-full max-w-md">
-        <Card className="shadow-2xl">
+        <Card className="shadow-2xl border-t-4 border-t-primary">
           <CardHeader className="text-center items-center">
-            <DynamicLogo width={200} height={200} className="mb-4" />
-            <CardTitle className="text-3xl font-headline text-primary">AppAusentismo</CardTitle>
-            <CardDescription>Ingrese sus credenciales para continuar</CardDescription>
+            <DynamicLogo width={180} height={180} className="mb-4" />
+            <CardTitle className="text-3xl font-bold text-primary">AppAusentismo</CardTitle>
+            <CardDescription>Gestión de Reportes SED-CAUCA</CardDescription>
           </CardHeader>
           <form onSubmit={handleLogin}>
             <CardContent>
               <div className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="email">Correo Electrónico</Label>
+                  <Label htmlFor="email">Usuario / Correo</Label>
                   <Input
                     id="email"
                     type="text"
-                    placeholder="usuario@correo.com"
+                    placeholder="admin o rector@correo.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     required
                     disabled={isLoading}
+                    autoComplete="username"
                   />
                 </div>
                 <div className="space-y-2">
@@ -102,18 +112,31 @@ export default function LoginPage() {
                     onChange={(e) => setPassword(e.target.value)}
                     required
                     disabled={isLoading}
+                    autoComplete="current-password"
                   />
                 </div>
               </div>
             </CardContent>
             <CardFooter>
-              <Button type="submit" className="w-full" disabled={isLoading}>
-                {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <LogIn className="mr-2 h-4 w-4" />}
-                {isLoading ? 'Ingresando...' : 'Ingresar'}
+              <Button type="submit" className="w-full h-11 text-base font-semibold" disabled={isLoading}>
+                {isLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                    Verificando...
+                  </>
+                ) : (
+                  <>
+                    <LogIn className="mr-2 h-5 w-5" />
+                    Ingresar al Sistema
+                  </>
+                )}
               </Button>
             </CardFooter>
           </form>
         </Card>
+        <p className="mt-6 text-center text-xs text-muted-foreground italic">
+          Secretaría de Educación del Cauca - Oficina de Sistemas
+        </p>
       </div>
     </main>
   );
