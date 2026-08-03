@@ -1,12 +1,13 @@
 
 'use server';
 /**
- * @fileOverview A flow to download a report from Firebase Storage.
+ * @fileOverview A flow to download a report from the local storage.
  */
 
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
-import { storage } from '@/lib/firebase-admin';
+import fs from 'fs/promises';
+import path from 'path';
 
 const DownloadReportInputSchema = z.object({
     fileName: z.string(),
@@ -27,20 +28,16 @@ const downloadReportFlow = ai.defineFlow(
     { name: 'downloadReportFlow', inputSchema: DownloadReportInputSchema, outputSchema: DownloadReportOutputSchema },
     async (input) => {
         try {
-            const bucket = storage.bucket();
-            const file = bucket.file(`reports/${input.fileName}`);
+            const filePath = path.join(process.cwd(), 'storage', 'reports', input.fileName);
+            const fileBuffer = await fs.readFile(filePath);
             
-            const [exists] = await file.exists();
-            if (!exists) throw new Error("El archivo no existe en la nube.");
-
-            const [fileBuffer] = await file.download();
             return {
                 success: true,
                 fileContent: fileBuffer.toString('base64'),
                 fileName: input.fileName,
             };
         } catch (error: any) {
-            return { success: false, error: error.message };
+            return { success: false, error: "El archivo no se pudo encontrar en el servidor local." };
         }
     }
 );

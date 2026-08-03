@@ -1,16 +1,8 @@
 
-import { initializeApp, getApps, cert } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
-import { getStorage } from 'firebase-admin/storage';
+/**
+ * @fileOverview Firebase Admin inert configuration for local mode.
+ * Disabling initialization to avoid service account errors during local operation.
+ */
 
-const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT || '{}');
-
-if (!getApps().length) {
-  initializeApp({
-    credential: cert(serviceAccount),
-    storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || 'appausentismo.firebasestorage.app',
-  });
-}
-
-export const db = getFirestore();
-export const storage = getStorage();
+export const db = null as any;
+export const storage = null as any;
