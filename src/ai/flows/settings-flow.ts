@@ -1,15 +1,12 @@
+
 'use server';
 /**
- * @fileOverview Flow to manage global app settings like access control for roles.
+ * @fileOverview Flow to manage global app settings using Firestore.
  */
 
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
-import * as fs from 'fs/promises';
-import * as path from 'path';
-
-const STORAGE_DIR = path.join(process.cwd(), 'storage');
-const SETTINGS_FILE = path.join(STORAGE_DIR, 'settings.json');
+import { db } from '@/lib/firebase-admin';
 
 const SettingsSchema = z.object({
     rectorEnabled: z.boolean(),
@@ -18,13 +15,8 @@ const SettingsSchema = z.object({
 
 export type AppSettings = z.infer<typeof SettingsSchema>;
 
-async function ensureStorage() {
-    try {
-        await fs.access(STORAGE_DIR);
-    } catch {
-        await fs.mkdir(STORAGE_DIR, { recursive: true });
-    }
-}
+const SETTINGS_COLLECTION = 'app_settings';
+const GLOBAL_SETTINGS_DOC = 'global';
 
 export async function getAppSettings(): Promise<AppSettings> {
     return getAppSettingsFlow();
@@ -34,11 +26,13 @@ const getAppSettingsFlow = ai.defineFlow(
     { name: 'getAppSettingsFlow', outputSchema: SettingsSchema },
     async () => {
         try {
-            await ensureStorage();
-            const data = await fs.readFile(SETTINGS_FILE, 'utf-8');
-            return JSON.parse(data);
-        } catch {
-            // Default settings if file doesn't exist
+            const doc = await db.collection(SETTINGS_COLLECTION).doc(GLOBAL_SETTINGS_DOC).get();
+            if (doc.exists) {
+                return doc.data() as AppSettings;
+            }
+            return { rectorEnabled: true, directorEnabled: true };
+        } catch (error) {
+            console.error("Error fetching settings from Firestore:", error);
             return { rectorEnabled: true, directorEnabled: true };
         }
     }
@@ -51,8 +45,12 @@ export async function updateAppSettings(settings: AppSettings) {
 const updateAppSettingsFlow = ai.defineFlow(
     { name: 'updateAppSettingsFlow', inputSchema: SettingsSchema, outputSchema: z.object({ success: z.boolean() }) },
     async (input) => {
-        await ensureStorage();
-        await fs.writeFile(SETTINGS_FILE, JSON.stringify(input, null, 2), 'utf-8');
-        return { success: true };
+        try {
+            await db.collection(SETTINGS_COLLECTION).doc(GLOBAL_SETTINGS_DOC).set(input, { merge: true });
+            return { success: true };
+        } catch (error) {
+            console.error("Error updating settings in Firestore:", error);
+            return { success: false };
+        }
     }
 );

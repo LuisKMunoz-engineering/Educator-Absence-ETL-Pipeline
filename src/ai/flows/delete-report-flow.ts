@@ -1,62 +1,29 @@
+
 'use server';
 /**
- * @fileOverview A flow to delete a specific report file.
- *
- * - deleteReport - Removes a report file from the storage.
- * - DeleteReportInput - The input type for the deleteReport function.
+ * @fileOverview A flow to delete a report from Firebase Storage.
  */
 
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
-import * as fs from 'fs/promises';
-import * as path from 'path';
+import { storage } from '@/lib/firebase-admin';
 
 const DeleteReportInputSchema = z.object({
-    fileName: z.string().refine(name => /^[a-zA-Z0-9_.-]+\.xlsx$/.test(name), {
-        message: "Nombre de archivo inválido."
-    }),
+    fileName: z.string(),
 });
 
-export type DeleteReportInput = z.infer<typeof DeleteReportInputSchema>;
-
-const DeleteReportOutputSchema = z.object({
-    success: z.boolean(),
-    error: z.string().optional(),
-});
-
-export async function deleteReport(input: DeleteReportInput) {
+export async function deleteReport(input: z.infer<typeof DeleteReportInputSchema>) {
     return deleteReportFlow(input);
 }
 
 const deleteReportFlow = ai.defineFlow(
-    {
-        name: 'deleteReportFlow',
-        inputSchema: DeleteReportInputSchema,
-        outputSchema: DeleteReportOutputSchema,
-    },
+    { name: 'deleteReportFlow', inputSchema: DeleteReportInputSchema, outputSchema: z.object({ success: z.boolean(), error: z.string().optional() }) },
     async (input) => {
         try {
-            // Validate that the filename doesn't contain path traversal characters
-            if (input.fileName.includes('..')) {
-                throw new Error("Acceso no permitido.");
-            }
-
-            const filePath = path.join(process.cwd(), 'storage', 'reports', input.fileName);
-            
-            // Check if file exists before trying to delete
-            await fs.access(filePath);
-            await fs.unlink(filePath);
-
-            return {
-                success: true,
-            };
-
+            await storage.bucket().file(`reports/${input.fileName}`).delete();
+            return { success: true };
         } catch (error: any) {
-            console.error("Error in deleteReportFlow:", error);
-            if (error.code === 'ENOENT') {
-                return { success: false, error: 'El archivo solicitado no existe.' };
-            }
-            return { success: false, error: error.message || 'Ocurrió un error al eliminar el reporte.' };
+            return { success: false, error: error.message };
         }
     }
 );

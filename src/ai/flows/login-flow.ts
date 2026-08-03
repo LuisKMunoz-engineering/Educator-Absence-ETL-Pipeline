@@ -1,15 +1,14 @@
+
 'use server';
 /**
- * @fileOverview Flow to handle login validation against the JSON user store and access settings.
+ * @fileOverview Flow to handle login validation against Firestore and app settings.
  */
 
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
-import * as fs from 'fs/promises';
-import * as path from 'path';
+import { db } from '@/lib/firebase-admin';
 import { getAppSettings } from './settings-flow';
 
-const USERS_FILE = path.join(process.cwd(), 'storage', 'users.json');
 const ADMIN_EMAIL = 'admin';
 const ADMIN_PASSWORD = '12345';
 
@@ -34,7 +33,7 @@ const loginFlow = ai.defineFlow(
         const email = input.email.trim().toLowerCase();
         const password = input.password.trim();
 
-        // Check Admin - Admin always has access regardless of settings
+        // Check Admin
         if (email === ADMIN_EMAIL && password === ADMIN_PASSWORD) {
             return {
                 success: true,
@@ -43,33 +42,31 @@ const loginFlow = ai.defineFlow(
         }
 
         try {
-            // Load App Settings for access control
             const settings = await getAppSettings();
-
-            await fs.access(USERS_FILE);
-            const data = await fs.readFile(USERS_FILE, 'utf-8');
-            const users = JSON.parse(data) as any[];
+            const userDoc = await db.collection('users').doc(email).get();
             
-            const user = users.find(u => 
-                String(u.email).toLowerCase().trim() === email && 
-                String(u.password).trim() === password
-            );
-
-            if (user) {
-                // Check if the role is enabled based on settings
-                if (user.role === 'rector' && !settings.rectorEnabled) {
-                    return { success: false, error: 'El acceso para Rectores está cerrado según el cronograma de la SED-CAUCA.' };
-                }
-                if (user.role === 'director' && !settings.directorEnabled) {
-                    return { success: false, error: 'El acceso para Directores de Núcleo está cerrado según el cronograma de la SED-CAUCA.' };
-                }
-
-                return { success: true, user };
+            if (!userDoc.exists) {
+                return { success: false, error: 'Usuario no encontrado.' };
             }
-        } catch (e) {
-            console.error("Login flow storage error or file missing:", e);
-        }
 
-        return { success: false, error: 'Credenciales inválidas o el sistema de usuarios no ha sido inicializado.' };
+            const user = userDoc.data();
+            if (String(user?.password).trim() !== password) {
+                return { success: false, error: 'Contraseña incorrecta.' };
+            }
+
+            // Check if role is enabled
+            if (user?.role === 'rector' && !settings.rectorEnabled) {
+                return { success: false, error: 'El acceso para Rectores está cerrado según el cronograma.' };
+            }
+            if (user?.role === 'director' && !settings.directorEnabled) {
+                return { success: false, error: 'El acceso para Directores está cerrado según el cronograma.' };
+            }
+
+            return { success: true, user };
+
+        } catch (e) {
+            console.error("Login flow error:", e);
+            return { success: false, error: 'Error interno del servidor.' };
+        }
     }
 );

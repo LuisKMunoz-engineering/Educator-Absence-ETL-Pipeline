@@ -1,16 +1,13 @@
 
 'use server';
 /**
- * @fileOverview A flow to process and save absenteeism reports.
- *
- * - processReport - Handles checking for, and saving report data to an Excel file.
+ * @fileOverview A flow to process and save absenteeism reports using Firebase Storage.
  */
 
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 import * as XLSX from 'xlsx';
-import * as fs from 'fs/promises';
-import * as path from 'path';
+import { storage } from '@/lib/firebase-admin';
 import { format } from 'date-fns';
 
 const parseInputDate = (dateString?: string) => {
@@ -37,7 +34,6 @@ const parseDateValue = (value?: string | Date): Date | undefined => {
                 if (timeParts.length >= 2) {
                    date.setHours(parseInt(timeParts[0], 10));
                    date.setMinutes(parseInt(timeParts[1], 10));
-                   if (timeParts.length > 2) date.setSeconds(parseInt(timeParts[2], 10));
                 }
             }
             if (!isNaN(date.getTime())) return date;
@@ -63,21 +59,16 @@ const reportItemSchema = z.object({
     isManual: z.boolean().optional(),
 });
 
-const CheckExistingInputSchema = z.object({
+const ProcessReportInputSchema = z.object({
     month: z.string(),
     municipality: z.string(),
     daneNumber: z.string(),
-});
-export type CheckExistingInput = z.infer<typeof CheckExistingInputSchema>;
-
-const ProcessReportInputSchema = CheckExistingInputSchema.extend({
     reporterName: z.string().optional(),
     reporterPosition: z.string().optional(),
     institutionName: z.string().optional(),
     reports: z.array(reportItemSchema).optional(),
     action: z.enum(['check', 'overwrite', 'append']),
 });
-export type ProcessReportInput = z.infer<typeof ProcessReportInputSchema>;
 
 const ProcessReportOutputSchema = z.object({
     success: z.boolean(),
@@ -86,51 +77,38 @@ const ProcessReportOutputSchema = z.object({
     rejectionObservation: z.string().optional(),
     existingReports: z.array(reportItemSchema).optional(),
     error: z.string().optional(),
-    filePath: z.string().optional(),
 });
-export type ProcessReportOutput = z.infer<typeof ProcessReportOutputSchema>;
 
-const REPORTS_DIR = path.join(process.cwd(), 'storage', 'reports');
-
-async function ensureDirectoryExists(dirPath: string) {
-    try {
-        await fs.access(dirPath);
-    } catch (error) {
-        await fs.mkdir(dirPath, { recursive: true });
-    }
-}
-
-export async function processReport(input: ProcessReportInput): Promise<ProcessReportOutput> {
+export async function processReport(input: z.infer<typeof ProcessReportInputSchema>): Promise<z.infer<typeof ProcessReportOutputSchema>> {
     return processReportFlow(input);
 }
 
 const processReportFlow = ai.defineFlow(
-    {
-        name: 'processReportFlow',
-        inputSchema: ProcessReportInputSchema,
-        outputSchema: ProcessReportOutputSchema,
-    },
+    { name: 'processReportFlow', inputSchema: ProcessReportInputSchema, outputSchema: ProcessReportOutputSchema },
     async (input) => {
         try {
-            await ensureDirectoryExists(REPORTS_DIR);
-            const fileName = `Ausentismo_${input.month}.xlsx`;
-            const filePath = path.join(REPORTS_DIR, fileName);
+            const fileName = `reports/Ausentismo_${input.month}.xlsx`;
+            const bucket = storage.bucket();
+            const file = bucket.file(fileName);
 
             let workbook: XLSX.WorkBook;
             let existingData: any[] = [];
             let fileExists = false;
 
             try {
-                await fs.access(filePath);
-                fileExists = true;
-                const fileBuffer = await fs.readFile(filePath);
-                workbook = XLSX.read(fileBuffer, { type: 'buffer' });
-                const sheetName = workbook.SheetNames[0];
-                if (sheetName) {
-                    existingData = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { raw: false });
+                const [exists] = await file.exists();
+                if (exists) {
+                    fileExists = true;
+                    const [fileBuffer] = await file.download();
+                    workbook = XLSX.read(fileBuffer, { type: 'buffer' });
+                    const sheetName = workbook.SheetNames[0];
+                    if (sheetName) {
+                        existingData = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { raw: false });
+                    }
+                } else {
+                    workbook = XLSX.utils.book_new();
                 }
             } catch (e) {
-                fileExists = false;
                 workbook = XLSX.utils.book_new();
             }
 
@@ -146,32 +124,26 @@ const processReportFlow = ai.defineFlow(
             if (input.action === 'check') {
                 if (isRejected) {
                     const firstRowWithObs = institutionRecords.find(row => row['Observación del Director']);
-                    const mappedReports = institutionRecords.map(row => {
-                        const d = (val: any) => {
-                            const parsed = parseDateValue(val);
-                            return parsed ? format(parsed, 'yyyy-MM-dd') : '';
-                        };
-                        return {
-                            cedula: String(row['Cédula'] || ''),
-                            nombreCompleto: String(row['Nombre Completo'] || ''),
-                            cargoActual: String(row['Cargo Actual'] || ''),
-                            fechaInicio: d(row['Fecha Inicio']),
-                            fechaFinal: d(row['Fecha Final']),
-                            fechaAusenciaUnDia: d(row['Fecha Ausencia menos de un día']),
-                            horaInicio: row['Hora Inicio'] || '',
-                            horaFinal: row['Hora Final'] || '',
-                            fechaSolicitudPermiso: d(row['Fecha Solicitud Permiso']),
-                            fechaAutorizacionPermiso: d(row['Fecha Autorización Permiso']),
-                            motivoPermiso: row['Motivo de Permiso'] || '',
-                            observaciones: row['Observaciones'] || '',
-                            isManual: true,
-                        };
-                    });
+                    const mappedReports = institutionRecords.map(row => ({
+                        cedula: String(row['Cédula'] || ''),
+                        nombreCompleto: String(row['Nombre Completo'] || ''),
+                        cargoActual: String(row['Cargo Actual'] || ''),
+                        fechaInicio: parseDateValue(row['Fecha Inicio']) ? format(parseDateValue(row['Fecha Inicio'])!, 'yyyy-MM-dd') : '',
+                        fechaFinal: parseDateValue(row['Fecha Final']) ? format(parseDateValue(row['Fecha Final'])!, 'yyyy-MM-dd') : '',
+                        fechaAusenciaUnDia: parseDateValue(row['Fecha Ausencia menos de un día']) ? format(parseDateValue(row['Fecha Ausencia menos de un día'])!, 'yyyy-MM-dd') : '',
+                        horaInicio: row['Hora Inicio'] || '',
+                        horaFinal: row['Hora Final'] || '',
+                        fechaSolicitudPermiso: parseDateValue(row['Fecha Solicitud Permiso']) ? format(parseDateValue(row['Fecha Solicitud Permiso'])!, 'yyyy-MM-dd') : '',
+                        fechaAutorizacionPermiso: parseDateValue(row['Fecha Autorización Permiso']) ? format(parseDateValue(row['Fecha Autorización Permiso'])!, 'yyyy-MM-dd') : '',
+                        motivoPermiso: row['Motivo de Permiso'] || '',
+                        observaciones: row['Observaciones'] || '',
+                        isManual: true,
+                    }));
                     return { 
                         success: true, 
                         reportExists: false, 
                         isRejected: true,
-                        rejectionObservation: firstRowWithObs ? String(firstRowWithObs['Observación del Director']) : 'Reporte marcado para corrección.',
+                        rejectionObservation: firstRowWithObs ? String(firstRowWithObs['Observación del Director']) : 'Reporte rechazado.',
                         existingReports: mappedReports 
                     };
                 }
@@ -226,51 +198,21 @@ const processReportFlow = ai.defineFlow(
                 'Fecha Solicitud Permiso', 'Fecha Autorización Permiso', 'Motivo de Permiso', 'Observaciones', 'Verificado', 'Estado del Reporte', 'Observación del Director'
             ];
             
-            const orderedData = finalData.map(row => {
-                const orderedRow: {[key: string]: any} = {};
-                headers.forEach(header => {
-                    orderedRow[header] = row[header] ?? '';
-                });
-                return orderedRow;
-            });
-
-            const newSheet = XLSX.utils.json_to_sheet(orderedData, { header: headers, cellDates: true });
-            const dateColumns = [6, 7, 8, 11, 12];
-            const dateTimeColumns = [15];
-            const range = XLSX.utils.decode_range(newSheet['!ref']!);
-            for (let R = range.s.r + 1; R <= range.e.r; ++R) {
-                for (const C of dateColumns) {
-                    const cell_address = XLSX.utils.encode_cell({c: C, r: R});
-                    if (!newSheet[cell_address] || !newSheet[cell_address].v) continue;
-                    newSheet[cell_address].t = 'd';
-                    newSheet[cell_address].z = 'dd/mm/yyyy';
-                }
-                for (const C of dateTimeColumns) {
-                    const cell_address = XLSX.utils.encode_cell({c: C, r: R});
-                    if (!newSheet[cell_address] || !newSheet[cell_address].v) continue;
-                    newSheet[cell_address].t = 'd';
-                    newSheet[cell_address].z = 'dd/mm/yyyy hh:mm:ss';
-                }
-            }
-            
-            newSheet['!cols'] = [
-                { wch: 15 }, { wch: 20 }, { wch: 40 }, { wch: 15 }, { wch: 40 }, { wch: 40 },
-                { wch: 15 }, { wch: 15 }, { wch: 20 }, { wch: 12 }, { wch: 12 }, 
-                { wch: 20 }, { wch: 20 }, { wch: 25 }, { wch: 50 }, { wch: 20 }, { wch: 25 }, { wch: 50 }
-            ];
-            
+            const newSheet = XLSX.utils.json_to_sheet(finalData, { header: headers, cellDates: true });
             if (workbook.SheetNames.length === 0) {
                 XLSX.utils.book_append_sheet(workbook, newSheet, `Reporte ${input.month}`);
             } else {
                 workbook.Sheets[workbook.SheetNames[0]] = newSheet;
             }
 
-            await fs.writeFile(filePath, XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' }));
-            return { success: true, filePath };
+            const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+            await file.save(buffer, { contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+            
+            return { success: true };
 
         } catch (error: any) {
             console.error("Error in processReportFlow:", error);
-            return { success: false, error: error.message || 'Ocurrió un error al procesar el reporte.' };
+            return { success: false, error: error.message };
         }
     }
 );

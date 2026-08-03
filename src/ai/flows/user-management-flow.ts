@@ -1,12 +1,12 @@
+
 'use server';
 /**
- * @fileOverview Flow to manage users (Rectores and Directores) in a JSON file.
+ * @fileOverview Flow to manage users using Firestore.
  */
 
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
-import * as fs from 'fs/promises';
-import * as path from 'path';
+import { db, storage } from '@/lib/firebase-admin';
 import * as XLSX from 'xlsx';
 
 const UserSchema = z.object({
@@ -23,31 +23,7 @@ const UserSchema = z.object({
 
 export type User = z.infer<typeof UserSchema>;
 
-const STORAGE_DIR = path.join(process.cwd(), 'storage');
-const USERS_FILE = path.join(STORAGE_DIR, 'users.json');
-
-async function ensureStorage() {
-    try {
-        await fs.access(STORAGE_DIR);
-    } catch {
-        await fs.mkdir(STORAGE_DIR, { recursive: true });
-    }
-}
-
-async function readUsers(): Promise<User[]> {
-    try {
-        await ensureStorage();
-        const data = await fs.readFile(USERS_FILE, 'utf-8');
-        return JSON.parse(data);
-    } catch {
-        return [];
-    }
-}
-
-async function writeUsers(users: User[]) {
-    await ensureStorage();
-    await fs.writeFile(USERS_FILE, JSON.stringify(users, null, 2), 'utf-8');
-}
+const USERS_COLLECTION = 'users';
 
 export async function getUsers() {
     return getUsersFlow();
@@ -56,7 +32,8 @@ export async function getUsers() {
 const getUsersFlow = ai.defineFlow(
     { name: 'getUsersFlow', outputSchema: z.array(UserSchema) },
     async () => {
-        return await readUsers();
+        const snapshot = await db.collection(USERS_COLLECTION).get();
+        return snapshot.docs.map(doc => doc.data() as User);
     }
 );
 
@@ -67,14 +44,8 @@ export async function saveUser(user: User) {
 const saveUserFlow = ai.defineFlow(
     { name: 'saveUserFlow', inputSchema: UserSchema, outputSchema: z.object({ success: z.boolean() }) },
     async (input) => {
-        const users = await readUsers();
-        const index = users.findIndex(u => u.email.toLowerCase() === input.email.toLowerCase());
-        if (index > -1) {
-            users[index] = input;
-        } else {
-            users.push(input);
-        }
-        await writeUsers(users);
+        const userRef = db.collection(USERS_COLLECTION).doc(input.email.toLowerCase().trim());
+        await userRef.set(input, { merge: true });
         return { success: true };
     }
 );
@@ -86,9 +57,7 @@ export async function deleteUser(email: string) {
 const deleteUserFlow = ai.defineFlow(
     { name: 'deleteUserFlow', inputSchema: z.string(), outputSchema: z.object({ success: z.boolean() }) },
     async (email) => {
-        const users = await readUsers();
-        const filtered = users.filter(u => u.email.toLowerCase() !== email.toLowerCase());
-        await writeUsers(filtered);
+        await db.collection(USERS_COLLECTION).doc(email.toLowerCase().trim()).delete();
         return { success: true };
     }
 );
@@ -101,16 +70,21 @@ const syncFromExcelFlow = ai.defineFlow(
     { name: 'syncFromExcelFlow', outputSchema: z.object({ success: z.boolean(), count: z.number(), error: z.string().optional() }) },
     async () => {
         try {
-            const currentUsers = await readUsers();
-            // Solo sincronizamos si no hay usuarios
-            if (currentUsers.length > 0) return { success: true, count: currentUsers.length };
+            // Check if we already have users
+            const snapshot = await db.collection(USERS_COLLECTION).limit(1).get();
+            if (!snapshot.empty) {
+                const total = await db.collection(USERS_COLLECTION).count().get();
+                return { success: true, count: total.data().count };
+            }
 
+            // Sync from local public files (only if Firestore is empty)
             const newUsers: User[] = [];
+            const fs = await import('fs/promises');
+            const path = await import('path');
 
             // Rectores
             try {
                 const rectoresPath = path.join(process.cwd(), 'public', 'data', 'rectores.xlsx');
-                await fs.access(rectoresPath);
                 const fileBuffer = await fs.readFile(rectoresPath);
                 const workbook = XLSX.read(fileBuffer, { type: 'buffer' });
                 const sheet = workbook.Sheets[workbook.SheetNames[0]];
@@ -129,12 +103,11 @@ const syncFromExcelFlow = ai.defineFlow(
                         institution: String(row['ESTABLECIMIENTO EDUCATIVO'] || ''),
                     });
                 });
-            } catch (e) { console.warn("Sync Rectores skipped or failed:", e); }
+            } catch (e) { console.warn("Sync Rectores skipped:", e); }
 
             // Directores
             try {
                 const directoresPath = path.join(process.cwd(), 'public', 'data', 'directoresDeNucleo.xlsx');
-                await fs.access(directoresPath);
                 const fileBuffer = await fs.readFile(directoresPath);
                 const workbook = XLSX.read(fileBuffer, { type: 'buffer' });
                 const sheet = workbook.Sheets[workbook.SheetNames[0]];
@@ -162,10 +135,15 @@ const syncFromExcelFlow = ai.defineFlow(
                     }
                 });
                 newUsers.push(...Array.from(directorMap.values()));
-            } catch (e) { console.warn("Sync Directores skipped or failed:", e); }
+            } catch (e) { console.warn("Sync Directores skipped:", e); }
 
             if (newUsers.length > 0) {
-                await writeUsers(newUsers);
+                const batch = db.batch();
+                newUsers.forEach(u => {
+                    const ref = db.collection(USERS_COLLECTION).doc(u.email.toLowerCase());
+                    batch.set(ref, u);
+                });
+                await batch.commit();
                 return { success: true, count: newUsers.length };
             }
 
