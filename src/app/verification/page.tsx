@@ -273,11 +273,26 @@ export default function VerificationPage() {
                               <span className="font-semibold">{group.institutionName}</span>
                               <span className="text-sm text-muted-foreground">DANE: {group.daneCode}</span>
                             </div>
-                            <div className="flex items-center space-x-2 mr-4" onClick={(e) => e.stopPropagation()}>
+                            <div className="flex items-center space-x-3 mr-4" onClick={(e) => e.stopPropagation()}>
                               <Badge variant={group.status === 'Rechazado para corrección' ? 'destructive' : group.status === 'Verificado' ? 'default' : 'secondary'}>
                                 {group.status}
                               </Badge>
-                              <Checkbox checked={verifiedStatus[group.daneCode] || false} onCheckedChange={(checked) => handleVerificationChange(group.daneCode, checked)} disabled={group.isFullyVerified} />
+                              
+                              <div className="flex items-center space-x-2">
+                                <Checkbox 
+                                  id={`verif-${group.daneCode}`}
+                                  checked={verifiedStatus[group.daneCode] || false} 
+                                  onCheckedChange={(checked) => handleVerificationChange(group.daneCode, checked)} 
+                                  disabled={group.isFullyVerified} 
+                                />
+                                <Label 
+                                  htmlFor={`verif-${group.daneCode}`} 
+                                  className="text-sm font-medium leading-none cursor-pointer whitespace-nowrap"
+                                >
+                                  Reporte Verificado
+                                </Label>
+                              </div>
+
                               <Button type="button" variant="destructive" size="sm" onClick={(e) => { e.stopPropagation(); setRejectionTarget({ daneCode: group.daneCode, institutionName: group.institutionName }); }} disabled={isRejectionLoading === group.daneCode}>
                                 <FileWarning className="h-4 w-4 mr-2"/>Rechazar
                               </Button>
