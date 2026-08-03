@@ -8,7 +8,7 @@ import { z } from 'genkit';
 import * as XLSX from 'xlsx';
 import fs from 'fs/promises';
 import path from 'path';
-import { format, isValid } from 'date-fns';
+import { format, isValid, parse } from 'date-fns';
 
 const GetReportsForVerificationInputSchema = z.object({
     daneCodes: z.array(z.string()),
@@ -21,6 +21,13 @@ const formatDateForDisplay = (value: any): string => {
     if (typeof value === 'number') {
         const date = XLSX.SSF.parse_date_code(value);
         return format(new Date(date.y, date.m - 1, date.d), 'dd/MM/yyyy');
+    }
+    if (typeof value === 'string' && value.trim() !== '') {
+        const formats = ['yyyy-MM-dd', 'dd/MM/yyyy', 'MM/dd/yyyy'];
+        for (const f of formats) {
+            const parsed = parse(value, f, new Date());
+            if (isValid(parsed)) return format(parsed, 'dd/MM/yyyy');
+        }
     }
     return String(value);
 };
@@ -38,13 +45,11 @@ const getReportsForVerificationFlow = ai.defineFlow(
             const workbook = XLSX.read(fileBuffer, { type: 'buffer', cellDates: true });
             const sheet = workbook.Sheets[workbook.SheetNames[0]];
             
-            // Read with raw: true to get Date objects where possible
             const allReports: any[] = XLSX.utils.sheet_to_json(sheet, { raw: true });
             
             const daneCodeSet = new Set(input.daneCodes);
             const filteredReports = allReports.filter(report => daneCodeSet.has(String(report['DANE ESTABLECIMIENTO EDUCATIVO'])));
             
-            // Format all date columns for uniform display in UI
             const formattedReports = filteredReports.map(report => ({
                 ...report,
                 'Fecha Inicio': formatDateForDisplay(report['Fecha Inicio']),

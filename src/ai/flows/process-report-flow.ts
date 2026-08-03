@@ -38,7 +38,6 @@ const parseDateValue = (value?: any): Date | undefined => {
     }
 
     if (typeof value === 'string' && value.trim() !== '') {
-        // Try common formats
         const formats = ['dd/MM/yyyy', 'yyyy-MM-dd', 'MM/dd/yyyy'];
         for (const f of formats) {
             const parsed = parse(value, f, new Date());
@@ -57,14 +56,6 @@ const parseDateValue = (value?: any): Date | undefined => {
 const formatDateForInput = (value: any): string => {
     const date = parseDateValue(value);
     return date ? format(date, 'yyyy-MM-dd') : '';
-};
-
-/**
- * Formats for display in tables (dd/MM/yyyy)
- */
-const formatDateForDisplay = (value: any): string => {
-    const date = parseDateValue(value);
-    return date ? format(date, 'dd/MM/yyyy') : (typeof value === 'string' ? value : '');
 };
 
 const reportItemSchema = z.object({
@@ -176,14 +167,12 @@ const processReportFlow = ai.defineFlow(
             const workbook = XLSX.utils.book_new();
             const sheet = XLSX.utils.json_to_sheet(finalData, { cellDates: true });
             
-            // Apply unified date format to all cells that are dates
             const range = XLSX.utils.decode_range(sheet['!ref'] || 'A1');
             for (let R = range.s.r; R <= range.e.r; ++R) {
                 for (let C = range.s.c; C <= range.e.c; ++C) {
-                    const cell_ref = XLSX.utils.encode_cell({ r: R, c: C });
-                    const cell = sheet[cell_ref];
+                    const cell = sheet[XLSX.utils.encode_cell({ r: R, c: C })];
                     if (cell && cell.t === 'd') {
-                        cell.z = 'dd/mm/yyyy'; // Excel date format
+                        cell.z = 'dd/mm/yyyy'; 
                     }
                 }
             }

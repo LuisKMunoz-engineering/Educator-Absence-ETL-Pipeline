@@ -48,7 +48,6 @@ const verifyReportsFlow = ai.defineFlow(
 
             const newSheet = XLSX.utils.json_to_sheet(updatedData, { cellDates: true });
             
-            // Reinforce date formatting
             const range = XLSX.utils.decode_range(newSheet['!ref'] || 'A1');
             for (let R = range.s.r; R <= range.e.r; ++R) {
                 for (let C = range.s.c; C <= range.e.c; ++C) {
