@@ -354,10 +354,21 @@ export default function VerificationPage() {
 
       <AlertDialog open={showWelcomeDialog} onOpenChange={setShowWelcomeDialog}>
         <AlertDialogContent>
-          <AlertDialogHeader><AlertDialogTitle>Bienvenido, Señor Director</AlertDialogTitle></AlertDialogHeader>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Bienvenido, Señor Director de núcleo.</AlertDialogTitle>
+            <AlertDialogDescription className="text-base text-foreground/80">
+              ¿Qué acción va a realizar en este momento?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
           <div className="flex flex-col gap-3 py-4">
-            <Button className="py-6 justify-start" onClick={() => setShowWelcomeDialog(false)}><ClipboardCheck className="mr-3 h-5 w-5" />Verificar reportes de las I.E.</Button>
-            <Button variant="outline" className="py-6 justify-start border-primary text-primary" onClick={() => router.push('/verification/soportes')}><ExternalLink className="mr-3 h-5 w-5" />Realizar reporte ante la SED</Button>
+            <Button className="py-6 justify-start h-auto whitespace-normal text-left" onClick={() => setShowWelcomeDialog(false)}>
+              <ClipboardCheck className="mr-3 h-6 w-6 shrink-0" />
+              <span>Verificar reportes enviados por las Instituciones Educativas</span>
+            </Button>
+            <Button variant="outline" className="py-6 justify-start h-auto whitespace-normal text-left border-primary text-primary" onClick={() => router.push('/verification/soportes')}>
+              <ExternalLink className="mr-3 h-6 w-6 shrink-0" />
+              <span>Realizar reporte de Ausentismo ante la SED-CAUCA</span>
+            </Button>
           </div>
         </AlertDialogContent>
       </AlertDialog>
