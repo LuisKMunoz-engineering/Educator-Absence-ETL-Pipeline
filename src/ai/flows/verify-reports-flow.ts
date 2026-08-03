@@ -10,26 +10,6 @@ import * as XLSX from 'xlsx';
 import fs from 'fs/promises';
 import path from 'path';
 
-/**
- * Helper to auto-adjust Excel column widths based on content.
- */
-function autoAdjustColumns(sheet: XLSX.WorkSheet, data: any[]) {
-    if (!data || data.length === 0) return;
-    const keys = Object.keys(data[0]);
-    const columnWidths = keys.map(key => {
-        let maxLen = key.toString().length;
-        for (const row of data) {
-            const val = row[key];
-            if (val !== undefined && val !== null) {
-                const len = val.toString().length;
-                if (len > maxLen) maxLen = len;
-            }
-        }
-        return { wch: Math.min(maxLen + 4, 50) };
-    });
-    sheet['!cols'] = columnWidths;
-}
-
 const VerifyReportsInputSchema = z.object({
     month: z.string(),
     verifiedDaneCodes: z.array(z.string()),
@@ -65,11 +45,7 @@ const verifyReportsFlow = ai.defineFlow(
                 return row;
             });
 
-            const sheet = XLSX.utils.json_to_sheet(updatedData, { cellDates: true });
-            
-            // Auto-adjust column widths
-            autoAdjustColumns(sheet, updatedData);
-            
+            const sheet = XLSX.utils.json_to_sheet(updatedData);
             workbook.Sheets[workbook.SheetNames[0]] = sheet;
             
             const buf = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
