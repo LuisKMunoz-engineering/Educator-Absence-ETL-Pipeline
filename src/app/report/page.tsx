@@ -17,7 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { PlusCircle, Send, LogOut, Loader2, Trash2, Upload, AlertCircle } from "lucide-react";
+import { PlusCircle, Send, LogOut, Loader2, Trash2, Upload, AlertCircle, FileEdit, ListPlus, RotateCcw } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -31,6 +31,7 @@ import { DynamicLogo } from "@/components/dynamic-logo";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { processReport } from "@/ai/flows/process-report-flow";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogAction } from "@/components/ui/alert-dialog";
 
 const reportItemSchema = z.object({
   cedula: z.string().min(1, "Requerido"),
@@ -70,7 +71,13 @@ export default function ReportPage() {
   const { toast } = useToast();
   const [isDaneLoading, setIsDaneLoading] = useState(false);
   const [institutionName, setInstitutionName] = useState('');
+  
+  // Rejection States
+  const [showRejectionDialog, setShowRejectionDialog] = useState(false);
   const [rejectionObservation, setRejectionObservation] = useState<string | null>(null);
+  const [rejectionExistingReports, setRejectionExistingReports] = useState<any[]>([]);
+  const [isManualAddEnabled, setIsManualAddEnabled] = useState(true);
+  const [isCorrection, setIsCorrection] = useState(false);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -121,16 +128,13 @@ export default function ReportPage() {
           const result = await processReport({ month: monthValue, daneNumber: daneValue, municipality: '', action: 'check' });
           if (result.success && result.isRejected) {
             setRejectionObservation(result.rejectionObservation || 'Reporte rechazado para corrección.');
-            if (result.existingReports && result.existingReports.length > 0) {
-              form.setValue('absenteeismChoice', 'yes');
-              replace(result.existingReports);
-              toast({
-                title: "Reporte para Corrección",
-                description: "Se han cargado los datos previos para que pueda corregirlos.",
-              });
-            }
+            setRejectionExistingReports(result.existingReports || []);
+            setShowRejectionDialog(true);
+            setIsCorrection(true);
           } else {
             setRejectionObservation(null);
+            setIsCorrection(false);
+            setIsManualAddEnabled(true);
           }
         } catch (e) {
           console.error("Error checking report status", e);
@@ -138,7 +142,29 @@ export default function ReportPage() {
       }
     };
     checkStatus();
-  }, [monthValue, daneValue, form, replace, toast]);
+  }, [monthValue, daneValue, form]);
+
+  const handleRejectionOption = (option: 1 | 2 | 3) => {
+    setShowRejectionDialog(false);
+    form.setValue('absenteeismChoice', 'yes');
+
+    if (option === 1) {
+      // Realizar correcciones en el reporte enviado (No permite agregar manual)
+      replace(rejectionExistingReports);
+      setIsManualAddEnabled(false);
+      toast({ title: "Modo Corrección", description: "Se han cargado los registros rechazados. Solo puede editar los existentes." });
+    } else if (option === 2) {
+      // Realizar correcciones y registrar otras novedades (Permite agregar manual)
+      replace(rejectionExistingReports);
+      setIsManualAddEnabled(true);
+      toast({ title: "Modo Edición y Anexión", description: "Se han cargado los registros rechazados y puede agregar nuevos." });
+    } else if (option === 3) {
+      // Realizar el reporte desde cero
+      replace([]);
+      setIsManualAddEnabled(true);
+      toast({ title: "Nuevo Reporte", description: "Iniciando reporte desde cero para este mes. El anterior será sobrescrito." });
+    }
+  };
 
   const { dateRange, finalDateRange } = useMemo(() => {
     if (!monthValue) return { dateRange: undefined, finalDateRange: undefined };
@@ -268,7 +294,7 @@ export default function ReportPage() {
             motivoPermiso: '',
         }];
     }
-    const dataToSend = { ...data, reports: reportsToSend, institutionName };
+    const dataToSend = { ...data, reports: reportsToSend, institutionName, isCorrection };
     const query = encodeURIComponent(JSON.stringify(dataToSend));
     router.push(`/summary?data=${query}`);
   }
@@ -346,7 +372,7 @@ export default function ReportPage() {
                                   <FormMessage />
                               </FormItem>
                           )} />
-                          <Button type="button" onClick={handleDaneLoad} disabled={isDaneLoading || absenteeismChoice !== 'yes'}>
+                          <Button type="button" onClick={handleDaneLoad} disabled={isDaneLoading || absenteeismChoice !== 'yes' || isCorrection}>
                             {isDaneLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Upload className="mr-2 h-4 w-4"/>}
                             {isDaneLoading ? 'Cargando...' : 'Cargar Planta'}
                           </Button>
@@ -379,6 +405,7 @@ export default function ReportPage() {
                                             }}
                                             value={field.value}
                                             className="flex items-center space-x-4"
+                                            disabled={isCorrection}
                                         >
                                             <FormItem className="flex items-center space-x-2">
                                                 <RadioGroupItem value="yes" id="choice-yes" />
@@ -485,9 +512,11 @@ export default function ReportPage() {
                         </Table>
                       </div>
 
-                      <Button type="button" variant="outline" className="mt-6 border-dashed" onClick={() => append({ cedula: '', nombreCompleto: '', cargoActual: '', fechaInicio: '', fechaFinal: '', fechaAusenciaUnDia: '', horaInicio: '', horaFinal: '', fechaSolicitudPermiso: '', fechaAutorizacionPermiso: '', motivoPermiso: '', observaciones: '', isManual: true })}>
-                          <PlusCircle className="mr-2 h-4 w-4" /> Agregar Persona Manualmente
-                      </Button>
+                      {isManualAddEnabled && (
+                        <Button type="button" variant="outline" className="mt-6 border-dashed" onClick={() => append({ cedula: '', nombreCompleto: '', cargoActual: '', fechaInicio: '', fechaFinal: '', fechaAusenciaUnDia: '', horaInicio: '', horaFinal: '', fechaSolicitudPermiso: '', fechaAutorizacionPermiso: '', motivoPermiso: '', observaciones: '', isManual: true })}>
+                            <PlusCircle className="mr-2 h-4 w-4" /> Agregar Persona Manualmente
+                        </Button>
+                      )}
                       {form.formState.errors.reports?.root && ( <p className="text-sm font-medium text-destructive mt-2">{form.formState.errors.reports.root.message}</p> )}
                     </CardContent>
                 </Card>
@@ -503,6 +532,50 @@ export default function ReportPage() {
             </form>
             </Form>
         </main>
+
+        <AlertDialog open={showRejectionDialog} onOpenChange={setShowRejectionDialog}>
+          <AlertDialogContent className="max-w-2xl">
+            <AlertDialogHeader>
+              <AlertDialogTitle className="flex items-center text-destructive">
+                <AlertCircle className="mr-2 h-6 w-6" />
+                Atención: Reporte con Observaciones
+              </AlertDialogTitle>
+              <AlertDialogDescription className="text-base text-foreground">
+                <p className="mb-4">El Director de Núcleo ha rechazado su reporte con la siguiente observación:</p>
+                <div className="p-4 bg-destructive/10 border-l-4 border-destructive rounded italic mb-6">
+                  "{rejectionObservation}"
+                </div>
+                <p className="font-bold text-primary mb-4">Según las observaciones de la Dirección de núcleo, seleccione la acción a realizar:</p>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <div className="grid grid-cols-1 gap-3 py-4">
+              <Button variant="outline" className="justify-start h-auto py-4 px-6 text-left whitespace-normal hover:bg-primary/5 hover:border-primary" onClick={() => handleRejectionOption(1)}>
+                <FileEdit className="mr-3 h-5 w-5 shrink-0 text-primary" />
+                <div>
+                  <div className="font-bold">1. Realizar correcciones en el reporte enviado</div>
+                  <div className="text-xs text-muted-foreground">Solo cargará las personas previamente reportadas para su modificación.</div>
+                </div>
+              </Button>
+              <Button variant="outline" className="justify-start h-auto py-4 px-6 text-left whitespace-normal hover:bg-primary/5 hover:border-primary" onClick={() => handleRejectionOption(2)}>
+                <ListPlus className="mr-3 h-5 w-5 shrink-0 text-primary" />
+                <div>
+                  <div className="font-bold">2. Realizar correcciones en el reporte enviado y registrar otras novedades</div>
+                  <div className="text-xs text-muted-foreground">Cargará los datos previos y permitirá agregar nuevas personas manualmente.</div>
+                </div>
+              </Button>
+              <Button variant="outline" className="justify-start h-auto py-4 px-6 text-left whitespace-normal hover:bg-destructive/5 hover:border-destructive" onClick={() => handleRejectionOption(3)}>
+                <RotateCcw className="mr-3 h-5 w-5 shrink-0 text-destructive" />
+                <div>
+                  <div className="font-bold text-destructive">3. Realizar el reporte desde cero</div>
+                  <div className="text-xs text-muted-foreground">Se limpiará todo el reporte previo para iniciar de nuevo cargando la planta.</div>
+                </div>
+              </Button>
+            </div>
+            <AlertDialogFooter>
+              <p className="text-[10px] text-muted-foreground text-center w-full">Cualquier opción elegida reemplazará el reporte rechazado anterior.</p>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
     </div>
   );
 }

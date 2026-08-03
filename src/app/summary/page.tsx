@@ -1,3 +1,4 @@
+
 'use client';
 
 import { Suspense, useEffect, useState } from 'react';
@@ -34,6 +35,7 @@ interface SubmissionData {
     daneNumber: string;
     institutionName: string;
     reports: ReportItem[];
+    isCorrection?: boolean;
 }
 
 function SummaryDisplay() {
@@ -61,6 +63,12 @@ function SummaryDisplay() {
       if (data) {
         const checkExistingReport = async () => {
           try {
+            // If it's a correction, we always overwrite. No need to check for conflicts or show dialogs.
+            if (data.isCorrection) {
+               handleSave('overwrite');
+               return;
+            }
+
             const checkInput: ProcessReportInput = {
               month: data.month,
               municipality: data.municipality,
@@ -75,7 +83,6 @@ function SummaryDisplay() {
               setStatus('conflict');
               setShowConflictDialog(true);
             } else {
-              // No conflict, proceed to save
               handleSave('append');
             }
           } catch (error: any) {
