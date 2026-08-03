@@ -1,7 +1,6 @@
-
 'use server';
 /**
- * @fileOverview A flow to process and save absenteeism reports locally.
+ * @fileOverview A flow to process and save absenteeism reports locally with unified date formatting.
  */
 
 import { ai } from '@/ai/genkit';
@@ -9,18 +8,16 @@ import { z } from 'genkit';
 import * as XLSX from 'xlsx';
 import fs from 'fs/promises';
 import path from 'path';
-import { format, parseISO, isValid } from 'date-fns';
+import { format, parseISO, isValid, parse } from 'date-fns';
 
 /**
- * Parses a date string from the client (YYYY-MM-DD) into a JS Date object.
- * Sets time to noon to avoid timezone shift issues.
+ * Parses a date string from the client (YYYY-MM-DD) into a JS Date object at noon.
  */
 const parseInputDate = (dateString?: string) => {
     if (!dateString || dateString.trim() === '') return undefined;
     try {
         const date = parseISO(dateString);
         if (!isValid(date)) return undefined;
-        // Ensure noon to avoid UTC/Local shifts
         date.setHours(12, 0, 0, 0);
         return date;
     } catch (e) {
@@ -35,39 +32,39 @@ const parseDateValue = (value?: any): Date | undefined => {
     if (!value) return undefined;
     if (value instanceof Date) return value;
     
-    // If it's a serial number from Excel
     if (typeof value === 'number') {
         const date = XLSX.SSF.parse_date_code(value);
         return new Date(date.y, date.m - 1, date.d, 12, 0, 0);
     }
 
     if (typeof value === 'string' && value.trim() !== '') {
-        // Try DD/MM/YYYY common in our Excel exports
-        const parts = value.split('/');
-        if (parts.length === 3) {
-            const d = parseInt(parts[0], 10);
-            const m = parseInt(parts[1], 10) - 1;
-            const y = parseInt(parts[2], 10);
-            const date = new Date(y, m, d, 12, 0, 0);
-            if (!isNaN(date.getTime())) return date;
-        }
-
-        const fallbackDate = new Date(value);
-        if (!isNaN(fallbackDate.getTime())) {
-            fallbackDate.setHours(12, 0, 0, 0);
-            return fallbackDate;
+        // Try common formats
+        const formats = ['dd/MM/yyyy', 'yyyy-MM-dd', 'MM/dd/yyyy'];
+        for (const f of formats) {
+            const parsed = parse(value, f, new Date());
+            if (isValid(parsed)) {
+                parsed.setHours(12, 0, 0, 0);
+                return parsed;
+            }
         }
     }
     return undefined;
 };
 
 /**
- * Safely formats a date to YYYY-MM-DD for HTML inputs.
+ * Formats for HTML date input (yyyy-MM-dd)
  */
 const formatDateForInput = (value: any): string => {
     const date = parseDateValue(value);
-    if (!date) return '';
-    return format(date, 'yyyy-MM-dd');
+    return date ? format(date, 'yyyy-MM-dd') : '';
+};
+
+/**
+ * Formats for display in tables (dd/MM/yyyy)
+ */
+const formatDateForDisplay = (value: any): string => {
+    const date = parseDateValue(value);
+    return date ? format(date, 'dd/MM/yyyy') : (typeof value === 'string' ? value : '');
 };
 
 const reportItemSchema = z.object({
@@ -114,7 +111,7 @@ const processReportFlow = ai.defineFlow(
             try {
                 const fileBuffer = await fs.readFile(filePath);
                 const workbook = XLSX.read(fileBuffer, { type: 'buffer', cellDates: true });
-                existingData = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { raw: false });
+                existingData = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { raw: true });
             } catch (e) {}
 
             const institutionRecords = existingData.filter(row => String(row['DANE ESTABLECIMIENTO EDUCATIVO']) === String(input.daneNumber));
@@ -178,8 +175,20 @@ const processReportFlow = ai.defineFlow(
 
             const workbook = XLSX.utils.book_new();
             const sheet = XLSX.utils.json_to_sheet(finalData, { cellDates: true });
-            XLSX.utils.book_append_sheet(workbook, sheet, `Reporte ${input.month}`);
             
+            // Apply unified date format to all cells that are dates
+            const range = XLSX.utils.decode_range(sheet['!ref'] || 'A1');
+            for (let R = range.s.r; R <= range.e.r; ++R) {
+                for (let C = range.s.c; C <= range.e.c; ++C) {
+                    const cell_ref = XLSX.utils.encode_cell({ r: R, c: C });
+                    const cell = sheet[cell_ref];
+                    if (cell && cell.t === 'd') {
+                        cell.z = 'dd/mm/yyyy'; // Excel date format
+                    }
+                }
+            }
+
+            XLSX.utils.book_append_sheet(workbook, sheet, `Reporte ${input.month}`);
             const buf = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
             await fs.writeFile(filePath, buf);
             

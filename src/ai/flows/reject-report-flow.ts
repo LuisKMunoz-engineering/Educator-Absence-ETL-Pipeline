@@ -1,7 +1,6 @@
-
 'use server';
 /**
- * @fileOverview A flow to mark reports as rejected locally.
+ * @fileOverview A flow to mark reports as rejected with unified date formatting.
  */
 
 import { ai } from '@/ai/genkit';
@@ -26,12 +25,11 @@ const rejectReportFlow = ai.defineFlow(
     async (input) => {
         try {
             const reportsDir = path.join(process.cwd(), 'storage', 'reports');
-            await fs.mkdir(reportsDir, { recursive: true });
-            
             const filePath = path.join(reportsDir, `Ausentismo_${input.month}.xlsx`);
             const fileBuffer = await fs.readFile(filePath);
             const workbook = XLSX.read(fileBuffer, { type: 'buffer', cellDates: true });
-            const existingData: any[] = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { raw: false });
+            const sheet = workbook.Sheets[workbook.SheetNames[0]];
+            const existingData: any[] = XLSX.utils.sheet_to_json(sheet, { raw: true });
             
             const updatedData = existingData.map(row => {
                 if (String(row['DANE ESTABLECIMIENTO EDUCATIVO']) === input.daneCode) {
@@ -45,16 +43,27 @@ const rejectReportFlow = ai.defineFlow(
                 return row;
             });
 
-            const sheet = XLSX.utils.json_to_sheet(updatedData);
-            workbook.Sheets[workbook.SheetNames[0]] = sheet;
+            const newSheet = XLSX.utils.json_to_sheet(updatedData, { cellDates: true });
             
+            // Reinforce date formatting
+            const range = XLSX.utils.decode_range(newSheet['!ref'] || 'A1');
+            for (let R = range.s.r; R <= range.e.r; ++R) {
+                for (let C = range.s.c; C <= range.e.c; ++C) {
+                    const cell = newSheet[XLSX.utils.encode_cell({ r: R, c: C })];
+                    if (cell && cell.t === 'd') {
+                        cell.z = 'dd/mm/yyyy';
+                    }
+                }
+            }
+
+            workbook.Sheets[workbook.SheetNames[0]] = newSheet;
             const buf = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
             await fs.writeFile(filePath, buf);
             
             return { success: true };
         } catch (error: any) {
             console.error("Error rejecting report:", error);
-            return { success: false, error: "No se pudo guardar el rechazo en el archivo. Verifique permisos del servidor." };
+            return { success: false, error: error.message };
         }
     }
 );
