@@ -20,7 +20,7 @@ const parseInputDate = (dateString?: string) => {
     return isNaN(date.getTime()) ? undefined : date;
 };
 
-// Helper to parse 'dd/mm/yyyy' strings from existing Excel files or existing Date objects.
+// Robust helper to parse 'dd/mm/yyyy' strings or existing Date objects.
 const parseDateValue = (value?: string | Date): Date | undefined => {
     if (!value) return undefined;
     if (value instanceof Date) return value;
@@ -131,13 +131,14 @@ const processReportFlow = ai.defineFlow(
                 workbook = XLSX.read(fileBuffer, { type: 'buffer' });
                 const sheetName = workbook.SheetNames[0];
                 if (sheetName) {
-                    // Critical: Read formatted strings (raw: false) to preserve 'dd/mm/yyyy'
+                    // Read formatted strings to preserve 'dd/mm/yyyy'
                     existingData = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { raw: false });
                 }
             } else {
                 workbook = XLSX.utils.book_new();
             }
 
+            // Check for existing records of THIS institution in the current month file
             const blockingReportExists = existingData.some(row =>
                 String(row['DANE ESTABLECIMIENTO EDUCATIVO']) === String(input.daneNumber) &&
                 row['Estado del Reporte'] !== 'Rechazado para corrección'
@@ -151,7 +152,7 @@ const processReportFlow = ai.defineFlow(
                 throw new Error("No reports data provided for saving.");
             }
 
-            // New rows from form input
+            // Map new rows from frontend
             const newRows = input.reports.map(report => ({
                 'Municipio': input.municipality,
                 'DANE ESTABLECIMIENTO EDUCATIVO': input.daneNumber,
@@ -172,7 +173,7 @@ const processReportFlow = ai.defineFlow(
                 'Verificado': undefined,
             }));
 
-            // Process existing data to ensure dates are correctly parsed Date objects
+            // Crucial: Process existing data ensuring dates are correctly parsed Date objects
             const processedExistingData = existingData.map(row => ({
                 ...row,
                 'Fecha Inicio': parseDateValue(row['Fecha Inicio']),
@@ -184,14 +185,15 @@ const processReportFlow = ai.defineFlow(
             }));
 
             let finalData: any[];
-            const institutionExists = existingData.some(row => String(row['DANE ESTABLECIMIENTO EDUCATIVO']) === String(input.daneNumber));
-
-            if (institutionExists) {
-                const otherReports = processedExistingData.filter(row =>
+            
+            if (input.action === 'overwrite') {
+                // Remove ALL existing records for THIS DANE and replace with new ones
+                const otherInstitutionsData = processedExistingData.filter(row =>
                     String(row['DANE ESTABLECIMIENTO EDUCATIVO']) !== String(input.daneNumber)
                 );
-                finalData = [...otherReports, ...newRows];
+                finalData = [...otherInstitutionsData, ...newRows];
             } else {
+                // For 'append', we keep EVERY row in the file and just add the new ones at the end
                 finalData = [...processedExistingData, ...newRows];
             }
             
