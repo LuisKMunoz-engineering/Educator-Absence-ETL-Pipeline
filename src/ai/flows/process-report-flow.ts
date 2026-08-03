@@ -70,6 +70,26 @@ const formatDateForInput = (value: any): string => {
     return format(date, 'yyyy-MM-dd');
 };
 
+/**
+ * Helper to auto-adjust Excel column widths based on content.
+ */
+function autoAdjustColumns(sheet: XLSX.WorkSheet, data: any[]) {
+    if (!data || data.length === 0) return;
+    const keys = Object.keys(data[0]);
+    const columnWidths = keys.map(key => {
+        let maxLen = key.toString().length;
+        for (const row of data) {
+            const val = row[key];
+            if (val !== undefined && val !== null) {
+                const len = val.toString().length;
+                if (len > maxLen) maxLen = len;
+            }
+        }
+        return { wch: Math.min(maxLen + 4, 50) }; // Buffer and max limit
+    });
+    sheet['!cols'] = columnWidths;
+}
+
 const reportItemSchema = z.object({
     cedula: z.string(),
     nombreCompleto: z.string(),
@@ -112,7 +132,6 @@ const processReportFlow = ai.defineFlow(
             let existingData: any[] = [];
             try {
                 const fileBuffer = await fs.readFile(filePath);
-                // Use cellDates: true to read Excel dates as JS Date objects
                 const workbook = XLSX.read(fileBuffer, { type: 'buffer', cellDates: true });
                 existingData = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { raw: true });
             } catch (e) {}
@@ -129,7 +148,7 @@ const processReportFlow = ai.defineFlow(
                         cargoActual: String(row['Cargo Actual'] || ''),
                         fechaInicio: formatDateForInput(row['Fecha Inicio']),
                         fechaFinal: formatDateForInput(row['Fecha Final']),
-                        fechaAusenciaUnDia: formatDateForInput(row['Fecha Ausencia menos de un día']),
+                        fechaAusencia menos de un día: formatDateForInput(row['Fecha Ausencia menos de un día']),
                         horaInicio: row['Hora Inicio'] || '',
                         horaFinal: row['Hora Final'] || '',
                         fechaSolicitudPermiso: formatDateForInput(row['Fecha Solicitud Permiso']),
@@ -177,8 +196,11 @@ const processReportFlow = ai.defineFlow(
             }
 
             const workbook = XLSX.utils.book_new();
-            // cellDates: true ensures dates are written as native Excel dates
             const sheet = XLSX.utils.json_to_sheet(finalData, { cellDates: true });
+            
+            // Auto-adjust column widths
+            autoAdjustColumns(sheet, finalData);
+            
             XLSX.utils.book_append_sheet(workbook, sheet, `Reporte ${input.month}`);
             
             const buf = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
