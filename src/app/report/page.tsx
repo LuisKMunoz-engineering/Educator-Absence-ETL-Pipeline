@@ -1,4 +1,3 @@
-
 'use client';
 
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -149,17 +148,14 @@ export default function ReportPage() {
     form.setValue('absenteeismChoice', 'yes');
 
     if (option === 1) {
-      // Realizar correcciones en el reporte enviado (No permite agregar manual)
       replace(rejectionExistingReports);
       setIsManualAddEnabled(false);
       toast({ title: "Modo Corrección", description: "Se han cargado los registros rechazados. Solo puede editar los existentes." });
     } else if (option === 2) {
-      // Realizar correcciones y registrar otras novedades (Permite agregar manual)
       replace(rejectionExistingReports);
       setIsManualAddEnabled(true);
       toast({ title: "Modo Edición y Anexión", description: "Se han cargado los registros rechazados y puede agregar nuevos." });
     } else if (option === 3) {
-      // Realizar el reporte desde cero
       replace([]);
       setIsManualAddEnabled(true);
       toast({ title: "Nuevo Reporte", description: "Iniciando reporte desde cero para este mes. El anterior será sobrescrito." });
