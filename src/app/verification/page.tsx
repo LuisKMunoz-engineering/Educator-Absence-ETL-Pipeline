@@ -1,4 +1,3 @@
-
 'use client';
 
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -31,6 +30,7 @@ import { Badge } from "@/components/ui/badge";
 import { DynamicLogo } from "@/components/dynamic-logo";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 
 const reportItemSchema = z.object({
   'DANE ESTABLECIMIENTO EDUCATIVO': z.string(),
