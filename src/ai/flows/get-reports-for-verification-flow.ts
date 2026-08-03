@@ -26,6 +26,8 @@ const getReportsForVerificationFlow = ai.defineFlow(
             const fileBuffer = await fs.readFile(filePath);
             const workbook = XLSX.read(fileBuffer, { type: 'buffer' });
             const sheet = workbook.Sheets[workbook.SheetNames[0]];
+            
+            // Convert to JSON and immediately stringify/parse to ensure only plain objects are returned
             const allReports: any[] = XLSX.utils.sheet_to_json(sheet, { raw: false });
             
             const daneCodeSet = new Set(input.daneCodes);
@@ -40,7 +42,8 @@ const getReportsForVerificationFlow = ai.defineFlow(
                 }, {} as any)
             ).filter(d => filteredReports.filter(r => String(r['DANE ESTABLECIMIENTO EDUCATIVO']) === d).every(r => r['Verificado']));
 
-            return { success: true, reports: filteredReports, fullyVerifiedDaneCodes };
+            // Ensure we return a plain object for NextJS client components
+            return JSON.parse(JSON.stringify({ success: true, reports: filteredReports, fullyVerifiedDaneCodes }));
         } catch (e) {
             return { success: true, reports: [], message: 'No hay reportes para este mes.' };
         }

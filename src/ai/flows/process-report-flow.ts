@@ -90,7 +90,8 @@ const processReportFlow = ai.defineFlow(
                     observaciones: row['Observaciones'] || '',
                     isManual: true,
                 }));
-                return { success: true, reportExists: false, isRejected: true, rejectionObservation: firstRowWithObs ? String(firstRowWithObs['Observación del Director']) : 'Reporte rechazado.', existingReports: mappedReports };
+                // Ensure plain objects are returned
+                return JSON.parse(JSON.stringify({ success: true, reportExists: false, isRejected: true, rejectionObservation: firstRowWithObs ? String(firstRowWithObs['Observación del Director']) : 'Reporte rechazado.', existingReports: mappedReports }));
             }
             return { success: true, reportExists: institutionRecords.length > 0 };
         }
