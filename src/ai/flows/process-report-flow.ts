@@ -9,20 +9,65 @@ import { z } from 'genkit';
 import * as XLSX from 'xlsx';
 import fs from 'fs/promises';
 import path from 'path';
-import { format } from 'date-fns';
+import { format, parseISO, isValid } from 'date-fns';
 
+/**
+ * Parses a date string from the client (YYYY-MM-DD) into a JS Date object.
+ * Sets time to noon to avoid timezone shift issues.
+ */
 const parseInputDate = (dateString?: string) => {
-    if (!dateString) return undefined;
-    const date = new Date(`${dateString}T12:00:00`);
-    return isNaN(date.getTime()) ? undefined : date;
+    if (!dateString || dateString.trim() === '') return undefined;
+    try {
+        const date = parseISO(dateString);
+        if (!isValid(date)) return undefined;
+        // Ensure noon to avoid UTC/Local shifts
+        date.setHours(12, 0, 0, 0);
+        return date;
+    } catch (e) {
+        return undefined;
+    }
 };
 
-const parseDateValue = (value?: string | Date): Date | undefined => {
+/**
+ * Normalizes values from Excel to JS Date objects.
+ */
+const parseDateValue = (value?: any): Date | undefined => {
     if (!value) return undefined;
     if (value instanceof Date) return value;
-    if (typeof value !== 'string' || value.trim() === '') return undefined;
-    const fallbackDate = new Date(value);
-    return isNaN(fallbackDate.getTime()) ? undefined : fallbackDate;
+    
+    // If it's a serial number from Excel (unlikely with raw:false but possible)
+    if (typeof value === 'number') {
+        const date = XLSX.SSF.parse_date_code(value);
+        return new Date(date.y, date.m - 1, date.d, 12, 0, 0);
+    }
+
+    if (typeof value === 'string' && value.trim() !== '') {
+        // Try DD/MM/YYYY common in our Excel exports
+        const parts = value.split('/');
+        if (parts.length === 3) {
+            const d = parseInt(parts[0], 10);
+            const m = parseInt(parts[1], 10) - 1;
+            const y = parseInt(parts[2], 10);
+            const date = new Date(y, m, d, 12, 0, 0);
+            if (!isNaN(date.getTime())) return date;
+        }
+
+        const fallbackDate = new Date(value);
+        if (!isNaN(fallbackDate.getTime())) {
+            fallbackDate.setHours(12, 0, 0, 0);
+            return fallbackDate;
+        }
+    }
+    return undefined;
+};
+
+/**
+ * Safely formats a date to YYYY-MM-DD for HTML inputs.
+ */
+const formatDateForInput = (value: any): string => {
+    const date = parseDateValue(value);
+    if (!date) return '';
+    return format(date, 'yyyy-MM-dd');
 };
 
 const reportItemSchema = z.object({
@@ -67,8 +112,9 @@ const processReportFlow = ai.defineFlow(
             let existingData: any[] = [];
             try {
                 const fileBuffer = await fs.readFile(filePath);
-                const workbook = XLSX.read(fileBuffer, { type: 'buffer' });
-                existingData = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { raw: false });
+                // Use cellDates: true to read Excel dates as JS Date objects
+                const workbook = XLSX.read(fileBuffer, { type: 'buffer', cellDates: true });
+                existingData = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { raw: true });
             } catch (e) {}
 
             const institutionRecords = existingData.filter(row => String(row['DANE ESTABLECIMIENTO EDUCATIVO']) === String(input.daneNumber));
@@ -81,18 +127,24 @@ const processReportFlow = ai.defineFlow(
                         cedula: String(row['Cédula'] || ''),
                         nombreCompleto: String(row['Nombre Completo'] || ''),
                         cargoActual: String(row['Cargo Actual'] || ''),
-                        fechaInicio: parseDateValue(row['Fecha Inicio']) ? format(parseDateValue(row['Fecha Inicio'])!, 'yyyy-MM-dd') : '',
-                        fechaFinal: parseDateValue(row['Fecha Final']) ? format(parseDateValue(row['Fecha Final'])!, 'yyyy-MM-dd') : '',
-                        fechaAusenciaUnDia: parseDateValue(row['Fecha Ausencia menos de un día']) ? format(parseDateValue(row['Fecha Ausencia menos de un día'])!, 'yyyy-MM-dd') : '',
+                        fechaInicio: formatDateForInput(row['Fecha Inicio']),
+                        fechaFinal: formatDateForInput(row['Fecha Final']),
+                        fechaAusenciaUnDia: formatDateForInput(row['Fecha Ausencia menos de un día']),
                         horaInicio: row['Hora Inicio'] || '',
                         horaFinal: row['Hora Final'] || '',
-                        fechaSolicitudPermiso: parseDateValue(row['Fecha Solicitud Permiso']) ? format(parseDateValue(row['Fecha Solicitud Permiso'])!, 'yyyy-MM-dd') : '',
-                        fechaAutorizacionPermiso: parseDateValue(row['Fecha Autorización Permiso']) ? format(parseDateValue(row['Fecha Autorización Permiso'])!, 'yyyy-MM-dd') : '',
+                        fechaSolicitudPermiso: formatDateForInput(row['Fecha Solicitud Permiso']),
+                        fechaAutorizacionPermiso: formatDateForInput(row['Fecha Autorización Permiso']),
                         motivoPermiso: row['Motivo de Permiso'] || '',
                         observaciones: row['Observaciones'] || '',
                         isManual: true,
                     }));
-                    return JSON.parse(JSON.stringify({ success: true, reportExists: false, isRejected: true, rejectionObservation: firstRowWithObs ? String(firstRowWithObs['Observación del Director']) : 'Reporte rechazado.', existingReports: mappedReports }));
+                    return JSON.parse(JSON.stringify({ 
+                        success: true, 
+                        reportExists: false, 
+                        isRejected: true, 
+                        rejectionObservation: firstRowWithObs ? String(firstRowWithObs['Observación del Director']) : 'Reporte rechazado.', 
+                        existingReports: mappedReports 
+                    }));
                 }
                 return { success: true, reportExists: institutionRecords.length > 0 };
             }
@@ -125,6 +177,7 @@ const processReportFlow = ai.defineFlow(
             }
 
             const workbook = XLSX.utils.book_new();
+            // cellDates: true ensures dates are written as native Excel dates
             const sheet = XLSX.utils.json_to_sheet(finalData, { cellDates: true });
             XLSX.utils.book_append_sheet(workbook, sheet, `Reporte ${input.month}`);
             
