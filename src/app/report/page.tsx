@@ -1,3 +1,4 @@
+
 'use client';
 
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -16,7 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { PlusCircle, Send, LogOut, Loader2, Trash2, Upload } from "lucide-react";
+import { PlusCircle, Send, LogOut, Loader2, Trash2, Upload, AlertCircle } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -28,6 +29,8 @@ import { Label } from "@/components/ui/label";
 import { startOfMonth, endOfMonth, addMonths, format, isValid } from 'date-fns';
 import { DynamicLogo } from "@/components/dynamic-logo";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { processReport } from "@/ai/flows/process-report-flow";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 const reportItemSchema = z.object({
   cedula: z.string().min(1, "Requerido"),
@@ -67,6 +70,7 @@ export default function ReportPage() {
   const { toast } = useToast();
   const [isDaneLoading, setIsDaneLoading] = useState(false);
   const [institutionName, setInstitutionName] = useState('');
+  const [rejectionObservation, setRejectionObservation] = useState<string | null>(null);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -107,8 +111,34 @@ export default function ReportPage() {
   const isSubmitting = form.formState.isSubmitting;
   const canSubmit = form.formState.isValid;
 
-  const absenteeismChoice = form.watch('absenteeismChoice');
   const monthValue = form.watch('month');
+  const daneValue = form.watch('daneNumber');
+
+  useEffect(() => {
+    const checkStatus = async () => {
+      if (monthValue && daneValue) {
+        try {
+          const result = await processReport({ month: monthValue, daneNumber: daneValue, municipality: '', action: 'check' });
+          if (result.success && result.isRejected) {
+            setRejectionObservation(result.rejectionObservation || 'Reporte rechazado para corrección.');
+            if (result.existingReports && result.existingReports.length > 0) {
+              form.setValue('absenteeismChoice', 'yes');
+              replace(result.existingReports);
+              toast({
+                title: "Reporte para Corrección",
+                description: "Se han cargado los datos previos para que pueda corregirlos.",
+              });
+            }
+          } else {
+            setRejectionObservation(null);
+          }
+        } catch (e) {
+          console.error("Error checking report status", e);
+        }
+      }
+    };
+    checkStatus();
+  }, [monthValue, daneValue, form, replace, toast]);
 
   const { dateRange, finalDateRange } = useMemo(() => {
     if (!monthValue) return { dateRange: undefined, finalDateRange: undefined };
@@ -243,6 +273,8 @@ export default function ReportPage() {
     router.push(`/summary?data=${query}`);
   }
 
+  const absenteeismChoice = form.watch('absenteeismChoice');
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       <header className="p-4 flex justify-between items-center bg-card border-b sticky top-0 z-10 h-24">
@@ -262,6 +294,16 @@ export default function ReportPage() {
             <div className="flex flex-col items-center justify-center mb-6">
               <h1 className="text-3xl font-bold text-primary font-headline mt-2">Reporte de Ausentismo Laboral</h1>
             </div>
+
+            {rejectionObservation && (
+              <Alert variant="destructive" className="mb-6 border-2">
+                <AlertCircle className="h-4 w-4" />
+                <AlertTitle className="font-bold">Atención: Reporte Rechazado por el Director</AlertTitle>
+                <AlertDescription className="text-lg italic mt-2">
+                  "{rejectionObservation}"
+                </AlertDescription>
+              </Alert>
+            )}
             
             <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">

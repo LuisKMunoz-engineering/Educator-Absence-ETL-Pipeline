@@ -1,3 +1,4 @@
+
 'use client';
 
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -29,6 +30,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Badge } from "@/components/ui/badge";
 import { DynamicLogo } from "@/components/dynamic-logo";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { Textarea } from "@/components/ui/textarea";
 
 const reportItemSchema = z.object({
   'DANE ESTABLECIMIENTO EDUCATIVO': z.string(),
@@ -80,6 +82,7 @@ export default function VerificationPage() {
   const [verifiedStatus, setVerifiedStatus] = useState<Record<string, boolean>>({});
   const [isRejectionLoading, setIsRejectionLoading] = useState<string | null>(null);
   const [rejectionTarget, setRejectionTarget] = useState<{ daneCode: string, institutionName: string } | null>(null);
+  const [rejectionObservation, setRejectionObservation] = useState('');
   const [showWelcomeDialog, setShowWelcomeDialog] = useState(true);
 
   useEffect(() => {
@@ -107,8 +110,6 @@ export default function VerificationPage() {
     form.setValue('reporterCedula', directorCedula);
   }, [directorName, directorCedula, form]);
   
-  const isSubmitting = form.formState.isSubmitting;
-  
   const newlyVerifiedCount = Object.keys(verifiedStatus).filter(
     (dane) => verifiedStatus[dane] && !groupedReports.find(g => g.daneCode === dane)?.isFullyVerified
   ).length;
@@ -130,38 +131,29 @@ export default function VerificationPage() {
   };
 
   const handleReject = async () => {
-    if (!rejectionTarget) return;
-
-    const month = form.getValues("month");
-    if (!month) {
-        toast({ variant: "destructive", title: "Error", description: "El mes del reporte no está seleccionado." });
-        setRejectionTarget(null);
+    if (!rejectionTarget || !rejectionObservation.trim()) {
+        toast({ variant: "destructive", title: "Error", description: "Debe ingresar un motivo de rechazo." });
         return;
     }
 
+    const month = form.getValues("month");
     setIsRejectionLoading(rejectionTarget.daneCode);
 
     try {
         const input: RejectReportInput = {
             month: month,
             daneCode: rejectionTarget.daneCode,
+            observation: rejectionObservation.trim(),
         };
 
         const result = await rejectReport(input);
+        if (!result.success) throw new Error(result.error);
 
-        if (!result.success) {
-            throw new Error(result.error || "No se pudo rechazar el reporte.");
-        }
-
-        toast({
-            title: "Reporte Rechazado",
-            description: `El reporte de ${rejectionTarget.institutionName} fue marcado para corrección.`,
-        });
-
+        toast({ title: "Reporte Rechazado", description: `Se ha enviado la observación al Rector.` });
+        setRejectionObservation('');
         await handleLoadReports();
-
     } catch (error: any) {
-        toast({ variant: "destructive", title: "Error al Rechazar", description: error.message });
+        toast({ variant: "destructive", title: "Error", description: error.message });
     } finally {
         setIsRejectionLoading(null);
         setRejectionTarget(null);
@@ -171,374 +163,189 @@ export default function VerificationPage() {
   const handleLoadReports = async () => {
     const month = form.getValues("month");
     if (!month) {
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: "Por favor seleccione el mes del reporte a verificar.",
-      });
+      toast({ variant: "destructive", title: "Error", description: "Seleccione el mes." });
       return;
     }
-    if (daneCodes.length === 0) {
-      toast({
-        variant: "destructive",
-        title: "Error de configuración",
-        description: "No se encontraron códigos DANE para este director.",
-      });
-      return;
-    }
-    
     setIsLoading(true);
     setAllReports([]);
     setGroupedReports([]);
     setVerifiedStatus({});
 
     try {
-      const input: GetReportsForVerificationInput = {
-        daneCodes: daneCodes,
-        month: month
-      };
-
-      const result = await getReportsForVerification(input);
-
+      const result = await getReportsForVerification({ daneCodes, month });
       if (result.success && result.reports) {
         if (result.reports.length === 0) {
-           toast({
-              title: "Sin resultados",
-              description: result.message || "No se encontraron reportes para los establecimientos y el mes seleccionado.",
-          });
-          setIsLoading(false);
-          return;
+           toast({ title: "Sin resultados", description: "No hay reportes para este mes." });
+           setIsLoading(false);
+           return;
         }
-        
         const fullyVerifiedDaneCodes = new Set(result.fullyVerifiedDaneCodes || []);
-        const initialVerifiedStatus: Record<string, boolean> = {};
-
         const groups: { [key: string]: GroupedReport } = {};
         result.reports.forEach(report => {
           const dane = report['DANE ESTABLECIMIENTO EDUCATIVO'].toString();
           if (!groups[dane]) {
             const isFullyVerified = fullyVerifiedDaneCodes.has(dane);
-            const status = report['Estado del Reporte'] || 'Enviado';
             groups[dane] = {
               daneCode: dane,
               institutionName: report['ESTABLECIMIENTO EDUCATIVO'],
-              isFullyVerified: isFullyVerified,
-              status: status,
+              isFullyVerified,
+              status: report['Estado del Reporte'] || 'Enviado',
               reports: []
             };
-            if (isFullyVerified) {
-              initialVerifiedStatus[dane] = true;
-            }
           }
           groups[dane].reports.push(report);
         });
-
         setGroupedReports(Object.values(groups));
-        setVerifiedStatus(initialVerifiedStatus);
         setAllReports(result.reports);
-
-        toast({
-          title: "Éxito",
-          description: `Se cargaron ${result.reports.length} reportes para verificación.`,
-        });
-
-      } else {
-        throw new Error(result.error || "Ocurrió un error al cargar los reportes.");
       }
     } catch(error: any) {
-       toast({
-          variant: "destructive",
-          title: "Error al Cargar Reportes",
-          description: error.message || "No se pudieron obtener los reportes desde el servidor.",
-      });
+       toast({ variant: "destructive", title: "Error", description: error.message });
     } finally {
       setIsLoading(false);
     }
   }
 
   async function onSubmit(data: FormValues) {
-    const verifiedDaneCodes = Object.keys(verifiedStatus).filter(
-      (daneCode) => verifiedStatus[daneCode]
+    const newlyVerifiedDaneCodes = Object.keys(verifiedStatus).filter(
+      dane => verifiedStatus[dane] && !groupedReports.find(g => g.daneCode === dane)?.isFullyVerified
     );
-
-    const newlyVerifiedDaneCodes = verifiedDaneCodes.filter(
-        dane => !groupedReports.find(g => g.daneCode === dane)?.isFullyVerified
-    );
-
-
     if (newlyVerifiedDaneCodes.length === 0) {
-      toast({
-        variant: "destructive",
-        title: "Sin Selección",
-        description: "Debe marcar como verificado al menos un reporte nuevo o actualizado para poder enviar.",
-      });
+      toast({ variant: "destructive", title: "Sin Selección", description: "Debe marcar algún reporte nuevo como verificado." });
       return;
     }
-
     try {
-      const input: VerifyReportsInput = {
-        month: data.month,
-        verifiedDaneCodes: newlyVerifiedDaneCodes,
-      };
-
-      const result = await verifyReports(input);
-
-      if (!result.success) {
-        throw new Error(result.error || "Ocurrió un error desconocido al guardar la verificación.");
-      }
-      
-      const verifiedInstitutions = groupedReports
-        .filter(g => newlyVerifiedDaneCodes.includes(g.daneCode))
-        .map(g => ({ name: g.institutionName, dane: g.daneCode }));
-
-      const summaryData = {
-        directorName: data.reporterName,
-        month: data.month,
-        verifiedInstitutions: verifiedInstitutions,
-      };
-
-      const query = encodeURIComponent(JSON.stringify(summaryData));
-      router.push(`/verification-summary?data=${query}`);
-
+      const result = await verifyReports({ month: data.month, verifiedDaneCodes: newlyVerifiedDaneCodes });
+      if (!result.success) throw new Error(result.error);
+      const verifiedInsts = groupedReports.filter(g => newlyVerifiedDaneCodes.includes(g.daneCode)).map(g => ({ name: g.institutionName, dane: g.daneCode }));
+      router.push(`/verification-summary?data=${encodeURIComponent(JSON.stringify({ directorName: data.reporterName, month: data.month, verifiedInstitutions: verifiedInsts }))}`);
     } catch (error: any) {
-      toast({
-        variant: "destructive",
-        title: "Error al Enviar",
-        description: error.message,
-      });
+      toast({ variant: "destructive", title: "Error", description: error.message });
     }
   }
 
   return (
     <div className="min-h-screen bg-background text-foreground">
       <header className="p-4 flex justify-between items-center bg-card border-b sticky top-0 z-10 h-24">
-        <div className="flex items-center">
-          <DynamicLogo width={80} height={80} />
-        </div>
+        <div className="flex items-center"><DynamicLogo width={80} height={80} /></div>
         <div className="flex items-center gap-4">
           <ThemeToggle />
-          <Button variant="ghost" size="sm" onClick={handleLogout}>
-            <LogOut className="mr-2 h-4 w-4" />
-            Cerrar Sesión
-          </Button>
+          <Button variant="ghost" size="sm" onClick={handleLogout}><LogOut className="mr-2 h-4 w-4" />Cerrar Sesión</Button>
         </div>
       </header>
 
-        <main className="p-4 md:p-6 max-w-7xl mx-auto">
-            <div className="flex flex-col items-center justify-center mb-6">
-              <h1 className="text-3xl font-bold text-primary font-headline mt-2">Página de Verificación</h1>
-            </div>
+      <main className="p-4 md:p-6 max-w-7xl mx-auto">
+        <div className="flex flex-col items-center justify-center mb-6">
+          <h1 className="text-3xl font-bold text-primary font-headline mt-2">Página de Verificación</h1>
+        </div>
+        
+        <Form {...form}>
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+            <Card>
+              <CardHeader><CardTitle>Información del Reportante</CardTitle></CardHeader>
+              <CardContent className="grid md:grid-cols-3 gap-6">
+                <FormField control={form.control} name="reporterName" render={({ field }) => (<FormItem><FormLabel>Nombre</FormLabel><Input {...field} readOnly className="bg-muted/20"/></FormItem>)} />
+                <FormField control={form.control} name="reporterCedula" render={({ field }) => (<FormItem><FormLabel>Cédula</FormLabel><Input {...field} readOnly className="bg-muted/20"/></FormItem>)} />
+                <FormField control={form.control} name="reporterPosition" render={({ field }) => (<FormItem><FormLabel>Cargo</FormLabel><Input {...field} readOnly className="bg-muted/20"/></FormItem>)} />
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader><CardTitle>Elección del Mes</CardTitle></CardHeader>
+              <CardContent className="flex items-end gap-4">
+                <FormField control={form.control} name="month" render={({ field }) => (<FormItem className="flex-grow"><FormLabel>Mes</FormLabel><Input type="month" {...field} /></FormItem>)} />
+                <Button type="button" onClick={handleLoadReports} disabled={isLoading}>
+                  {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Upload className="mr-2 h-4 w-4"/>}
+                  Cargar
+                </Button>
+              </CardContent>
+            </Card>
             
-            <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-                <Card>
-                <CardHeader>
-                    <CardTitle>Información del Reportante</CardTitle>
-                    <CardDescription>Datos del Director de Núcleo que realiza la verificación.</CardDescription>
-                </CardHeader>
-                <CardContent className="grid md:grid-cols-3 gap-6">
-                    <FormField control={form.control} name="reporterName" render={({ field }) => (
-                        <FormItem><FormLabel>Nombre Completo</FormLabel><FormControl><Input {...field} readOnly className="bg-muted/20"/></FormControl><FormMessage /></FormItem>
-                    )} />
-                    <FormField control={form.control} name="reporterCedula" render={({ field }) => (
-                        <FormItem><FormLabel>Cédula / No. Identificación</FormLabel><FormControl><Input {...field} readOnly className="bg-muted/20"/></FormControl><FormMessage /></FormItem>
-                    )} />
-                    <FormField control={form.control} name="reporterPosition" render={({ field }) => (
-                        <FormItem><FormLabel>Cargo</FormLabel><FormControl><Input {...field} readOnly className="bg-muted/20"/></FormControl><FormMessage /></FormItem>
-                    )} />
-                </CardContent>
-                </Card>
+            <Card className="bg-blue-50/10 dark:bg-blue-900/10">
+              <CardHeader><CardTitle>Reportes a Verificar</CardTitle></CardHeader>
+              <CardContent>
+                {groupedReports.length > 0 ? (
+                  <Accordion type="multiple" className="w-full">
+                    {groupedReports.map((group, idx) => (
+                      <AccordionItem value={`item-${idx}`} key={group.daneCode}>
+                        <AccordionTrigger>
+                          <div className="flex items-center justify-between w-full">
+                            <div className="flex flex-col text-left">
+                              <span className="font-semibold">{group.institutionName}</span>
+                              <span className="text-sm text-muted-foreground">DANE: {group.daneCode}</span>
+                            </div>
+                            <div className="flex items-center space-x-2 mr-4" onClick={(e) => e.stopPropagation()}>
+                              <Badge variant={group.status === 'Rechazado para corrección' ? 'destructive' : group.status === 'Verificado' ? 'default' : 'secondary'}>
+                                {group.status}
+                              </Badge>
+                              <Checkbox checked={verifiedStatus[group.daneCode] || false} onCheckedChange={(checked) => handleVerificationChange(group.daneCode, checked)} disabled={group.isFullyVerified} />
+                              <Button type="button" variant="destructive" size="sm" onClick={(e) => { e.stopPropagation(); setRejectionTarget({ daneCode: group.daneCode, institutionName: group.institutionName }); }} disabled={isRejectionLoading === group.daneCode}>
+                                <FileWarning className="h-4 w-4 mr-2"/>Rechazar
+                              </Button>
+                            </div>
+                          </div>
+                        </AccordionTrigger>
+                        <AccordionContent>
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead>Cédula</TableHead>
+                                <TableHead>Nombre</TableHead>
+                                <TableHead>Cargo</TableHead>
+                                <TableHead>Estado</TableHead>
+                                <TableHead>Verificado</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {group.reports.map((r, ridx) => (
+                                <TableRow key={ridx}>
+                                  <TableCell>{r['Cédula']}</TableCell>
+                                  <TableCell>{r['Nombre Completo']}</TableCell>
+                                  <TableCell>{r['Cargo Actual']}</TableCell>
+                                  <TableCell>{r['Estado del Reporte']}</TableCell>
+                                  <TableCell>{r['Verificado'] || 'Pendiente'}</TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </AccordionContent>
+                      </AccordionItem>
+                    ))}
+                  </Accordion>
+                ) : <p className="text-center text-muted-foreground mt-4">No hay reportes cargados.</p>}
+              </CardContent>
+            </Card>
 
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Elección del Mes de Reporte:</CardTitle>
-                        <CardDescription>Ingrese el mes de reporte que usted como Director de Núcleo va a verificar y reportar.</CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-6">
-                      <div className="flex items-end gap-4">
-                        <FormField control={form.control} name="month" render={({ field }) => (
-                            <FormItem className="flex-grow"><FormLabel>Mes del Reporte a Verificar</FormLabel><FormControl><Input type="month" {...field} /></FormControl><FormMessage /></FormItem>
-                        )} />
-                        <Button type="button" onClick={handleLoadReports} disabled={isLoading}>
-                          {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Upload className="mr-2 h-4 w-4"/>}
-                          {isLoading ? 'Cargando...' : 'Cargar'}
-                        </Button>
-                      </div>
-                    </CardContent>
-                </Card>
-                
-                <Card className="bg-blue-50/10 dark:bg-blue-900/10">
-                    <CardHeader>
-                      <CardTitle>Reportes a Verificar:</CardTitle>
-                      <CardDescription>Esta sección es de sólo lectura. Use las casillas para marcar un reporte como verificado.</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      {groupedReports.length > 0 ? (
-                        <Accordion type="multiple" className="w-full">
-                          {groupedReports.map((group, groupIndex) => (
-                            <AccordionItem value={`item-${groupIndex}`} key={group.daneCode}>
-                              <AccordionTrigger>
-                                <div className="flex items-center justify-between w-full">
-                                    <div className="flex flex-col text-left">
-                                        <span className="font-semibold">{group.institutionName}</span>
-                                        <span className="text-sm text-muted-foreground">DANE: {group.daneCode}</span>
-                                    </div>
-                                    <Badge 
-                                      variant={
-                                        group.status === 'Rechazado para corrección' ? 'destructive' :
-                                        group.status === 'Verificado' ? 'default' : 'secondary'
-                                      } 
-                                      className="ml-4"
-                                    >
-                                      {group.status}
-                                    </Badge>
-                                    <div className="flex items-center space-x-2 mr-4" onClick={(e) => e.stopPropagation()}>
-                                        <Checkbox
-                                            id={`verif-${group.daneCode}`}
-                                            checked={verifiedStatus[group.daneCode] || false}
-                                            onCheckedChange={(checked) => handleVerificationChange(group.daneCode, checked)}
-                                            disabled={group.isFullyVerified}
-                                        />
-                                        <label htmlFor={`verif-${group.daneCode}`} className={`text-sm font-medium leading-none ${group.isFullyVerified ? 'cursor-not-allowed text-muted-foreground' : 'cursor-pointer'}`}>
-                                            {group.isFullyVerified ? 'Verificado' : 'Reporte Verificado'}
-                                        </label>
-                                        <Button
-                                            type="button"
-                                            variant="destructive"
-                                            size="sm"
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                setRejectionTarget({ daneCode: group.daneCode, institutionName: group.institutionName });
-                                            }}
-                                            disabled={isRejectionLoading === group.daneCode}
-                                        >
-                                            {isRejectionLoading === group.daneCode ? <Loader2 className="h-4 w-4 animate-spin"/> : <FileWarning className="h-4 w-4"/>}
-                                            <span className="ml-2 hidden sm:inline">Rechazar</span>
-                                        </Button>
-                                    </div>
-                                </div>
-                              </AccordionTrigger>
-                              <AccordionContent>
-                                <div className="w-full overflow-x-auto">
-                                    <Table>
-                                    <TableHeader>
-                                        <TableRow>
-                                            <TableHead>Cédula</TableHead>
-                                            <TableHead>Nombre Completo</TableHead>
-                                            <TableHead>Cargo Actual</TableHead>
-                                            <TableHead>Fecha Inicio</TableHead>
-                                            <TableHead>Fecha Final</TableHead>
-                                            <TableHead>Fecha Ausencia &lt; 1 día</TableHead>
-                                            <TableHead>Hora Inicio</TableHead>
-                                            <TableHead>Hora Final</TableHead>
-                                            <TableHead>Fecha Solicitud</TableHead>
-                                            <TableHead>Fecha Autorización</TableHead>
-                                            <TableHead>Motivo</TableHead>
-                                            <TableHead>Observaciones</TableHead>
-                                            <TableHead>Estado</TableHead>
-                                            <TableHead>Verificado</TableHead>
-                                        </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                        {group.reports.map((report, reportIndex) => (
-                                            <TableRow key={`${group.daneCode}-${reportIndex}`}>
-                                                <TableCell className="font-medium">
-                                                    <div className="w-28 whitespace-nowrap">{report['Cédula']}</div>
-                                                </TableCell>
-                                                <TableCell>
-                                                    <div className="w-60 whitespace-nowrap">{report['Nombre Completo']}</div>
-                                                </TableCell>
-                                                <TableCell>
-                                                    <div className="w-60 whitespace-nowrap">{report['Cargo Actual']}</div>
-                                                </TableCell>
-                                                <TableCell><div className="w-28 whitespace-nowrap">{report['Fecha Inicio'] || ''}</div></TableCell>
-                                                <TableCell><div className="w-28 whitespace-nowrap">{report['Fecha Final'] || ''}</div></TableCell>
-                                                <TableCell><div className="w-36 whitespace-nowrap">{report['Fecha Ausencia menos de un día'] || ''}</div></TableCell>
-                                                <TableCell><div className="w-24 whitespace-nowrap">{report['Hora Inicio'] || ''}</div></TableCell>
-                                                <TableCell><div className="w-24 whitespace-nowrap">{report['Hora Final'] || ''}</div></TableCell>
-                                                <TableCell><div className="w-28 whitespace-nowrap">{report['Fecha Solicitud Permiso'] || ''}</div></TableCell>
-                                                <TableCell><div className="w-32 whitespace-nowrap">{report['Fecha Autorización Permiso'] || ''}</div></TableCell>
-                                                <TableCell><div className="w-40 whitespace-nowrap">{report['Motivo de Permiso'] || ''}</div></TableCell>
-                                                <TableCell><div className="w-60 whitespace-nowrap truncate">{report['Observaciones'] || ''}</div></TableCell>
-                                                <TableCell><div className="w-40 whitespace-nowrap">{report['Estado del Reporte'] || 'Enviado'}</div></TableCell>
-                                                <TableCell><div className="w-44 whitespace-nowrap">{report['Verificado'] || 'Pendiente'}</div></TableCell>
-                                            </TableRow>
-                                        ))}
-                                    </TableBody>
-                                    </Table>
-                                </div>
-                              </AccordionContent>
-                            </AccordionItem>
-                          ))}
-                        </Accordion>
-                      ) : (
-                         <p className="text-sm text-muted-foreground mt-4 text-center">
-                            Seleccione un mes y haga clic en 'Cargar' para ver los reportes pendientes de verificación.
-                         </p>
-                      )}
-                    </CardContent>
-                </Card>
+            <div className="flex justify-end"><Button type="submit" size="lg" disabled={!canSubmit || form.formState.isSubmitting}>Enviar Verificación</Button></div>
+        </form>
+        </Form>
+      </main>
 
-                <Separator />
+      <AlertDialog open={!!rejectionTarget} onOpenChange={(open) => !open && setRejectionTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Rechazar Reporte: {rejectionTarget?.institutionName}</AlertDialogTitle>
+            <AlertDialogDescription>Ingrese el motivo del rechazo. El Rector recibirá esta observación para corregir el reporte.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="py-4">
+            <Label htmlFor="obs">Observación del Director (Obligatorio)</Label>
+            <Textarea id="obs" value={rejectionObservation} onChange={(e) => setRejectionObservation(e.target.value)} placeholder="Ej: Falta reportar al docente Juan Pérez..." className="mt-2" />
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setRejectionObservation('')}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleReject} disabled={!rejectionObservation.trim()} className={buttonVariants({ variant: "destructive" })}>Confirmar Rechazo</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
-                <div className="flex justify-end items-center">
-                    <Button type="submit" size="lg" disabled={!canSubmit || isSubmitting}>
-                        {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Send className="mr-2 h-4 w-4" />}
-                        {isSubmitting ? 'Enviando...' : 'Enviar Verificación'}
-                    </Button>
-                </div>
-            </form>
-            </Form>
-
-            {/* Welcome Dialog */}
-            <AlertDialog open={showWelcomeDialog} onOpenChange={setShowWelcomeDialog}>
-              <AlertDialogContent className="max-w-md">
-                <AlertDialogHeader>
-                  <AlertDialogTitle className="text-2xl font-bold text-primary flex items-center gap-2">
-                    <ClipboardCheck className="h-6 w-6" />
-                    Bienvenido, Señor Director
-                  </AlertDialogTitle>
-                  <AlertDialogDescription className="text-base py-4">
-                    ¿Qué acción va a realizar en este momento?
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter className="flex flex-col sm:flex-col gap-3">
-                  <Button 
-                    className="w-full justify-start py-6 text-base" 
-                    onClick={() => setShowWelcomeDialog(false)}
-                  >
-                    <ClipboardCheck className="mr-3 h-5 w-5" />
-                    Verificar reportes enviados por las Instituciones Educativas
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    className="w-full justify-start py-6 text-base border-primary text-primary hover:bg-primary/10"
-                    onClick={() => router.push('/verification/soportes')}
-                  >
-                    <ExternalLink className="mr-3 h-5 w-5" />
-                    Realizar reporte de Ausentismo ante la SED-CAUCA
-                  </Button>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-
-             <AlertDialog open={!!rejectionTarget} onOpenChange={(open) => !open && setRejectionTarget(null)}>
-              <AlertDialogContent>
-                  <AlertDialogHeader>
-                      <AlertDialogTitle>¿Confirmar Rechazo?</AlertDialogTitle>
-                      <AlertDialogDescription>
-                          Esta acción marcará el reporte de <span className="font-bold">{rejectionTarget?.institutionName}</span> como "Rechazado para corrección" y permitirá al rector enviar una nueva versión. El estado de verificación actual se anulará. ¿Desea continuar?
-                      </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                      <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                      <AlertDialogAction onClick={handleReject} className={buttonVariants({ variant: "destructive" })}>
-                          Sí, Rechazar Reporte
-                      </AlertDialogAction>
-                  </AlertDialogFooter>
-              </AlertDialogContent>
-          </AlertDialog>
-        </main>
+      <AlertDialog open={showWelcomeDialog} onOpenChange={setShowWelcomeDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader><AlertDialogTitle>Bienvenido, Señor Director</AlertDialogTitle></AlertDialogHeader>
+          <div className="flex flex-col gap-3 py-4">
+            <Button className="py-6 justify-start" onClick={() => setShowWelcomeDialog(false)}><ClipboardCheck className="mr-3 h-5 w-5" />Verificar reportes de las I.E.</Button>
+            <Button variant="outline" className="py-6 justify-start border-primary text-primary" onClick={() => router.push('/verification/soportes')}><ExternalLink className="mr-3 h-5 w-5" />Realizar reporte ante la SED</Button>
+          </div>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

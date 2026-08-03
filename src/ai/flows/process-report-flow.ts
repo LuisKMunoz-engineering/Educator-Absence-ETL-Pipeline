@@ -1,10 +1,9 @@
+
 'use server';
 /**
  * @fileOverview A flow to process and save absenteeism reports.
  *
  * - processReport - Handles checking for, and saving report data to an Excel file.
- * - ProcessReportInput - The input type for the processReport function.
- * - ProcessReportOutput - The return type for the processReport function.
  */
 
 import { ai } from '@/ai/genkit';
@@ -12,15 +11,14 @@ import { z } from 'genkit';
 import * as XLSX from 'xlsx';
 import * as fs from 'fs/promises';
 import * as path from 'path';
+import { format } from 'date-fns';
 
-// Helper to safely parse date strings from form inputs (YYYY-MM-DD).
 const parseInputDate = (dateString?: string) => {
     if (!dateString) return undefined;
     const date = new Date(`${dateString}T12:00:00`);
     return isNaN(date.getTime()) ? undefined : date;
 };
 
-// Robust helper to parse 'dd/mm/yyyy' strings or existing Date objects.
 const parseDateValue = (value?: string | Date): Date | undefined => {
     if (!value) return undefined;
     if (value instanceof Date) return value;
@@ -84,6 +82,9 @@ export type ProcessReportInput = z.infer<typeof ProcessReportInputSchema>;
 const ProcessReportOutputSchema = z.object({
     success: z.boolean(),
     reportExists: z.boolean().optional(),
+    isRejected: z.boolean().optional(),
+    rejectionObservation: z.string().optional(),
+    existingReports: z.array(reportItemSchema).optional(),
     error: z.string().optional(),
     filePath: z.string().optional(),
 });
@@ -122,37 +123,63 @@ const processReportFlow = ai.defineFlow(
             try {
                 await fs.access(filePath);
                 fileExists = true;
-            } catch (e) {
-                fileExists = false;
-            }
-
-            if (fileExists) {
                 const fileBuffer = await fs.readFile(filePath);
                 workbook = XLSX.read(fileBuffer, { type: 'buffer' });
                 const sheetName = workbook.SheetNames[0];
                 if (sheetName) {
-                    // Read formatted strings to preserve 'dd/mm/yyyy'
                     existingData = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { raw: false });
                 }
-            } else {
+            } catch (e) {
+                fileExists = false;
                 workbook = XLSX.utils.book_new();
             }
 
-            // Check for existing records of THIS institution in the current month file
-            const blockingReportExists = existingData.some(row =>
-                String(row['DANE ESTABLECIMIENTO EDUCATIVO']) === String(input.daneNumber) &&
+            const institutionRecords = existingData.filter(row =>
+                String(row['DANE ESTABLECIMIENTO EDUCATIVO']) === String(input.daneNumber)
+            );
+
+            const isRejected = institutionRecords.some(row => row['Estado del Reporte'] === 'Rechazado para corrección');
+            const blockingReportExists = institutionRecords.some(row => 
                 row['Estado del Reporte'] !== 'Rechazado para corrección'
             );
 
             if (input.action === 'check') {
+                if (isRejected) {
+                    const firstRowWithObs = institutionRecords.find(row => row['Observación del Director']);
+                    const mappedReports = institutionRecords.map(row => {
+                        const d = (val: any) => {
+                            const parsed = parseDateValue(val);
+                            return parsed ? format(parsed, 'yyyy-MM-dd') : '';
+                        };
+                        return {
+                            cedula: String(row['Cédula'] || ''),
+                            nombreCompleto: String(row['Nombre Completo'] || ''),
+                            cargoActual: String(row['Cargo Actual'] || ''),
+                            fechaInicio: d(row['Fecha Inicio']),
+                            fechaFinal: d(row['Fecha Final']),
+                            fechaAusenciaUnDia: d(row['Fecha Ausencia menos de un día']),
+                            horaInicio: row['Hora Inicio'] || '',
+                            horaFinal: row['Hora Final'] || '',
+                            fechaSolicitudPermiso: d(row['Fecha Solicitud Permiso']),
+                            fechaAutorizacionPermiso: d(row['Fecha Autorización Permiso']),
+                            motivoPermiso: row['Motivo de Permiso'] || '',
+                            observaciones: row['Observaciones'] || '',
+                            isManual: true,
+                        };
+                    });
+                    return { 
+                        success: true, 
+                        reportExists: false, 
+                        isRejected: true,
+                        rejectionObservation: firstRowWithObs ? String(firstRowWithObs['Observación del Director']) : 'Reporte marcado para corrección.',
+                        existingReports: mappedReports 
+                    };
+                }
                 return { success: true, reportExists: blockingReportExists };
             }
             
-            if (!input.reports) {
-                throw new Error("No reports data provided for saving.");
-            }
+            if (!input.reports) throw new Error("No reports data provided.");
 
-            // Map new rows from frontend
             const newRows = input.reports.map(report => ({
                 'Municipio': input.municipality,
                 'DANE ESTABLECIMIENTO EDUCATIVO': input.daneNumber,
@@ -173,7 +200,6 @@ const processReportFlow = ai.defineFlow(
                 'Verificado': undefined,
             }));
 
-            // Crucial: Process existing data ensuring dates are correctly parsed Date objects
             const processedExistingData = existingData.map(row => ({
                 ...row,
                 'Fecha Inicio': parseDateValue(row['Fecha Inicio']),
@@ -185,22 +211,19 @@ const processReportFlow = ai.defineFlow(
             }));
 
             let finalData: any[];
-            
             if (input.action === 'overwrite') {
-                // Remove ALL existing records for THIS DANE and replace with new ones
                 const otherInstitutionsData = processedExistingData.filter(row =>
                     String(row['DANE ESTABLECIMIENTO EDUCATIVO']) !== String(input.daneNumber)
                 );
                 finalData = [...otherInstitutionsData, ...newRows];
             } else {
-                // For 'append', we keep EVERY row in the file and just add the new ones at the end
                 finalData = [...processedExistingData, ...newRows];
             }
             
             const headers = [
                 'Municipio', 'DANE ESTABLECIMIENTO EDUCATIVO', 'ESTABLECIMIENTO EDUCATIVO', 'Cédula', 'Nombre Completo', 'Cargo Actual',
                 'Fecha Inicio', 'Fecha Final', 'Fecha Ausencia menos de un día', 'Hora Inicio', 'Hora Final', 
-                'Fecha Solicitud Permiso', 'Fecha Autorización Permiso', 'Motivo de Permiso', 'Observaciones', 'Verificado', 'Estado del Reporte'
+                'Fecha Solicitud Permiso', 'Fecha Autorización Permiso', 'Motivo de Permiso', 'Observaciones', 'Verificado', 'Estado del Reporte', 'Observación del Director'
             ];
             
             const orderedData = finalData.map(row => {
@@ -212,10 +235,8 @@ const processReportFlow = ai.defineFlow(
             });
 
             const newSheet = XLSX.utils.json_to_sheet(orderedData, { header: headers, cellDates: true });
-            
             const dateColumns = [6, 7, 8, 11, 12];
             const dateTimeColumns = [15];
-
             const range = XLSX.utils.decode_range(newSheet['!ref']!);
             for (let R = range.s.r + 1; R <= range.e.r; ++R) {
                 for (const C of dateColumns) {
@@ -235,7 +256,7 @@ const processReportFlow = ai.defineFlow(
             newSheet['!cols'] = [
                 { wch: 15 }, { wch: 20 }, { wch: 40 }, { wch: 15 }, { wch: 40 }, { wch: 40 },
                 { wch: 15 }, { wch: 15 }, { wch: 20 }, { wch: 12 }, { wch: 12 }, 
-                { wch: 20 }, { wch: 20 }, { wch: 25 }, { wch: 50 }, { wch: 20 }, { wch: 25 }
+                { wch: 20 }, { wch: 20 }, { wch: 25 }, { wch: 50 }, { wch: 20 }, { wch: 25 }, { wch: 50 }
             ];
             
             if (workbook.SheetNames.length === 0) {
@@ -245,12 +266,11 @@ const processReportFlow = ai.defineFlow(
             }
 
             await fs.writeFile(filePath, XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' }));
-
             return { success: true, filePath };
 
         } catch (error: any) {
             console.error("Error in processReportFlow:", error);
-            return { success: false, error: error.message || 'An unknown error occurred.' };
+            return { success: false, error: error.message || 'Ocurrió un error al procesar el reporte.' };
         }
     }
 );
