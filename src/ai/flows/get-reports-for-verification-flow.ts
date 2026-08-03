@@ -1,19 +1,13 @@
 'use server';
 /**
- * @fileOverview A flow to retrieve absenteeism reports for verification by a director.
- *
- * - getReportsForVerification - Fetches reports for specific DANE codes and a specific month.
- * - GetReportsForVerificationInput - The input type for the getReportsForVerification function.
- * - GetReportsForVerificationOutput - The return type for the getReportsForVerification function.
+ * @fileOverview A flow to retrieve absenteeism reports for verification by a director using Firebase Storage.
  */
 
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 import * as XLSX from 'xlsx';
-import * as fs from 'fs/promises';
-import * as path from 'path';
+import { storage } from '@/lib/firebase-admin';
 
-// This schema should match the structure of a single report item in the Excel file.
 const ReportItemSchema = z.object({
     'Municipio': z.string().optional(),
     'DANE ESTABLECIMIENTO EDUCATIVO': z.union([z.string(), z.number()]),
@@ -35,13 +29,11 @@ const ReportItemSchema = z.object({
 });
 type ReportItem = z.infer<typeof ReportItemSchema>;
 
-
 const GetReportsForVerificationInputSchema = z.object({
     daneCodes: z.array(z.string()),
     month: z.string(),
 });
 export type GetReportsForVerificationInput = z.infer<typeof GetReportsForVerificationInputSchema>;
-
 
 const GetReportsForVerificationOutputSchema = z.object({
     success: z.boolean(),
@@ -52,14 +44,9 @@ const GetReportsForVerificationOutputSchema = z.object({
 });
 export type GetReportsForVerificationOutput = z.infer<typeof GetReportsForVerificationOutputSchema>;
 
-
-const REPORTS_DIR = path.join(process.cwd(), 'storage', 'reports');
-
-// Main exported function that the client will call.
 export async function getReportsForVerification(input: GetReportsForVerificationInput): Promise<GetReportsForVerificationOutput> {
     return getReportsForVerificationFlow(input);
 }
-
 
 const getReportsForVerificationFlow = ai.defineFlow(
     {
@@ -69,16 +56,16 @@ const getReportsForVerificationFlow = ai.defineFlow(
     },
     async (input) => {
         try {
-            const fileName = `Ausentismo_${input.month}.xlsx`;
-            const filePath = path.join(REPORTS_DIR, fileName);
+            const fileName = `reports/Ausentismo_${input.month}.xlsx`;
+            const bucket = storage.bucket();
+            const file = bucket.file(fileName);
 
-            try {
-                await fs.access(filePath);
-            } catch (e) {
+            const [exists] = await file.exists();
+            if (!exists) {
                 return { success: true, reports: [], message: 'No existe un archivo de reporte para el mes seleccionado.' };
             }
 
-            const fileBuffer = await fs.readFile(filePath);
+            const [fileBuffer] = await file.download();
             const workbook = XLSX.read(fileBuffer, { type: 'buffer' });
             const sheetName = workbook.SheetNames[0];
 
@@ -86,11 +73,7 @@ const getReportsForVerificationFlow = ai.defineFlow(
                  return { success: true, reports: [], message: 'El archivo de reporte para este mes está vacío.' };
             }
             
-            // Use `raw: false` to get formatted strings as they appear in Excel.
-            // This is critical to read dates formatted as dd/mm/yyyy correctly.
             const allReports: any[] = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { raw: false });
-
-
             const daneCodeSet = new Set(input.daneCodes);
             
             const filteredReports = allReports.filter(report => {
@@ -110,14 +93,12 @@ const getReportsForVerificationFlow = ai.defineFlow(
             const fullyVerifiedDaneCodes: string[] = [];
             for (const daneCode of Object.keys(reportsByDane)) {
                 const institutionReports = reportsByDane[daneCode];
-                // An institution is fully verified if ALL its report rows have a value in the 'Verificado' column.
                 const allVerified = institutionReports.every(report => report['Verificado'] && String(report['Verificado']).trim() !== '');
                 if (allVerified) {
                     fullyVerifiedDaneCodes.push(daneCode);
                 }
             }
             
-            // Ensure all fields are strings as the schema expects, just in case of any rogue data types.
             const validatedReports = filteredReports.map(report => {
                 const newReport: { [key: string]: any } = {};
                 for (const key in report) {
@@ -132,7 +113,7 @@ const getReportsForVerificationFlow = ai.defineFlow(
 
         } catch (error: any) {
             console.error("Error in getReportsForVerificationFlow:", error);
-            return { success: false, error: error.message || 'Ocurrió un error desconocido al obtener los reportes.' };
+            return { success: false, error: error.message || 'Ocurrió un error al obtener los reportes.' };
         }
     }
 );

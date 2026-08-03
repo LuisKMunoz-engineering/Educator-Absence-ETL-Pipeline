@@ -1,20 +1,13 @@
-
 'use server';
 /**
- * @fileOverview A flow to mark an absenteeism report as rejected for correction with an observation.
- *
- * - rejectReport - Finds a report file and updates rows for a specific DANE code to 'Rechazado para corrección'.
- * - RejectReportInput - The input type for the rejectReport function.
- * - RejectReportOutput - The return type for the rejectReport function.
+ * @fileOverview A flow to mark an absenteeism report as rejected for correction using Firebase Storage.
  */
 
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 import * as XLSX from 'xlsx';
-import * as fs from 'fs/promises';
-import * as path from 'path';
+import { storage } from '@/lib/firebase-admin';
 
-// Helper to parse 'dd/mm/yyyy' strings or existing Date objects into a valid Date object.
 const parseDateValue = (value?: string | Date): Date | undefined => {
     if (!value) return undefined;
     if (value instanceof Date) return value;
@@ -43,7 +36,6 @@ const parseDateValue = (value?: string | Date): Date | undefined => {
     return isNaN(fallbackDate.getTime()) ? undefined : fallbackDate;
 };
 
-
 const RejectReportInputSchema = z.object({
     month: z.string(),
     daneCode: z.string(),
@@ -57,8 +49,6 @@ const RejectReportOutputSchema = z.object({
 });
 export type RejectReportOutput = z.infer<typeof RejectReportOutputSchema>;
 
-const REPORTS_DIR = path.join(process.cwd(), 'storage', 'reports');
-
 export async function rejectReport(input: RejectReportInput): Promise<RejectReportOutput> {
     return rejectReportFlow(input);
 }
@@ -71,24 +61,23 @@ const rejectReportFlow = ai.defineFlow(
     },
     async (input) => {
         try {
-            const fileName = `Ausentismo_${input.month}.xlsx`;
-            const filePath = path.join(REPORTS_DIR, fileName);
+            const fileName = `reports/Ausentismo_${input.month}.xlsx`;
+            const bucket = storage.bucket();
+            const file = bucket.file(fileName);
             
             let workbook: XLSX.WorkBook;
             let existingData: any[] = [];
             
-            try {
-                await fs.access(filePath);
-                const fileBuffer = await fs.readFile(filePath);
-                workbook = XLSX.read(fileBuffer, { type: 'buffer' });
-                const sheetName = workbook.SheetNames[0];
-                if (sheetName) {
-                    existingData = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { raw: false });
-                } else {
-                    throw new Error("El archivo de reporte está vacío.");
-                }
-            } catch (error) {
-                return { success: false, error: "No se encontró el archivo de reporte." };
+            const [exists] = await file.exists();
+            if (!exists) return { success: false, error: "No se encontró el archivo de reporte." };
+
+            const [fileBuffer] = await file.download();
+            workbook = XLSX.read(fileBuffer, { type: 'buffer' });
+            const sheetName = workbook.SheetNames[0];
+            if (sheetName) {
+                existingData = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { raw: false });
+            } else {
+                throw new Error("El archivo de reporte está vacío.");
             }
             
             const updatedData = existingData.map(row => {
@@ -120,7 +109,6 @@ const rejectReportFlow = ai.defineFlow(
             ];
             
             const newSheet = XLSX.utils.json_to_sheet(updatedData, { header: headers, cellDates: true });
-
             const dateColumns = [6, 7, 8, 11, 12];
             const dateTimeColumns = [15];
             const range = XLSX.utils.decode_range(newSheet['!ref']!);
@@ -146,7 +134,8 @@ const rejectReportFlow = ai.defineFlow(
             ];
 
             workbook.Sheets[workbook.SheetNames[0]] = newSheet;
-            await fs.writeFile(filePath, XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' }));
+            const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+            await file.save(buffer, { contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
 
             return { success: true };
 
