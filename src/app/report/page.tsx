@@ -16,7 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { PlusCircle, Send, LogOut, Loader2, Trash2, Upload, Plus } from "lucide-react";
+import { PlusCircle, Send, LogOut, Loader2, Trash2, Upload } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -61,7 +61,6 @@ type FormValues = z.infer<typeof formSchema>;
 
 const municipalities = ["ALMAGUER", "ARGELIA", "BALBOA", "BOLIVAR", "BUENOS AIRES", "CAJIBIO", "CALDONO", "CALOTO", "CORINTO", "EL TAMBO", "FLORENCIA", "GUACHENE", "GUAPI", "INZA", "JAMBALO", "LA SIERRA", "LA VEGA", "LOPEZ DE MICAY", "MERCADERES", "MIRANDA", "MORALES", "PADILLA", "PAEZ", "PATIA Y AFRO SUR", "PIAMONTE", "PIENDAMO", "PUERTO TEJADA", "PURACE", "ROSAS", "SAN SEBASTIAN", "SANTANDER DE QUILICHAO", "SANTA ROSA", "SANTA ROSA MBC", "SILVIA", "SOTARA", "SUAREZ", "SUCRE", "TIMBIO", "TIMBIQUI", "TORIBIO", "TOTORO", "VILLARICA"];
 const motivosDePermiso = ["Adopción", "Calamidad Doméstica", "Capacitación", "Cita Médica", "Cita Médica Familiar", "Comisión de Estudios", "Comisión de Servicios", "Diligencias Administrativas", "Enfermedad Hijos o Familiar", "Evento Deportivo", "Matrimonio", "Huelga Autorizada", "Huelga No Autorizada", "Permisos Sindicales", "Tratamiento Médico", "Amenaza y Desplazamiento", "Arresto Correacional", "Desaparición", "Hospitalización", "Incapacidad", "Lactancia", "Licencia No Remunerada", "No Justificada", "Retiro", "Sanción", "Secuestro", "Otros"];
-const motivosDePermisoSinSolicitud = ["No Justificada"];
 
 export default function ReportPage() {
   const router = useRouter();
@@ -100,7 +99,7 @@ export default function ReportPage() {
     }
   }, [form]);
 
-  const { fields, append, remove, replace, insert } = useFieldArray({
+  const { fields, append, remove, replace } = useFieldArray({
     control: form.control,
     name: "reports",
   });
@@ -110,7 +109,6 @@ export default function ReportPage() {
 
   const absenteeismChoice = form.watch('absenteeismChoice');
   const monthValue = form.watch('month');
-  const watchedReports = form.watch('reports');
 
   const { dateRange, finalDateRange } = useMemo(() => {
     if (!monthValue) return { dateRange: undefined, finalDateRange: undefined };
@@ -160,7 +158,7 @@ export default function ReportPage() {
       const newReports = filteredData.map(row => ({
         cedula: String(row['CEDULA'] ?? ''),
         nombreCompleto: String(row['NOMBRE COMPLETO'] ?? ''),
-        cargoActual: String(row['CARGO ACTUAL'] ?? ''),
+        cargoActual: String(row['CARGO ACTUAL '] ?? ''),
         fechaInicio: '',
         fechaFinal: '',
         fechaAusenciaUnDia: '',
@@ -168,7 +166,7 @@ export default function ReportPage() {
         horaFinal: '',
         fechaSolicitudPermiso: '',
         fechaAutorizacionPermiso: '',
-        motivoPermiso: 'No Justificada',
+        motivoPermiso: '',
         observaciones: '',
         isManual: false,
       }));
@@ -197,7 +195,7 @@ export default function ReportPage() {
       const foundRow = jsonData.find(row => String(row['CEDULA']) === cedula);
       if (foundRow) {
         form.setValue(`reports.${index}.nombreCompleto`, String(foundRow['NOMBRE COMPLETO'] ?? ''));
-        form.setValue(`reports.${index}.cargoActual`, String(foundRow['CARGO ACTUAL'] ?? ''));
+        form.setValue(`reports.${index}.cargoActual`, String(foundRow['CARGO ACTUAL '] ?? ''));
         form.trigger(`reports.${index}.nombreCompleto`);
       } else {
         form.setValue(`reports.${index}.nombreCompleto`, '');
@@ -209,38 +207,13 @@ export default function ReportPage() {
     }
   }
 
-  const handleAddNovelty = (index: number) => {
-    const person = watchedReports[index];
-    insert(index + 1, {
-      cedula: person.cedula,
-      nombreCompleto: person.nombreCompleto,
-      cargoActual: person.cargoActual,
-      fechaInicio: '',
-      fechaFinal: '',
-      fechaAusenciaUnDia: '',
-      horaInicio: '',
-      horaFinal: '',
-      fechaSolicitudPermiso: '',
-      fechaAutorizacionPermiso: '',
-      motivoPermiso: 'No Justificada',
-      observaciones: '',
-      isManual: person.isManual,
-    });
-  };
-
-  const isLastOccurrence = (cedula: string, currentIndex: number) => {
-    if (!cedula) return false;
-    const lastIndex = watchedReports.map(r => r.cedula).lastIndexOf(cedula);
-    return lastIndex === currentIndex;
-  };
-
   function onSubmit(data: FormValues) {
     let reportsToSend: z.infer<typeof reportItemSchema>[] = [];
     if (data.absenteeismChoice === 'yes') {
         const hasAnyValue = (report: z.infer<typeof reportItemSchema>) => 
             report.fechaInicio || report.fechaFinal || report.fechaAusenciaUnDia ||
             report.horaInicio || report.horaFinal || report.fechaSolicitudPermiso ||
-            report.fechaAutorizacionPermiso || (report.motivoPermiso && report.motivoPermiso !== 'No Justificada') || report.observaciones;
+            report.fechaAutorizacionPermiso || report.motivoPermiso || report.observaciones;
         
         const reportsWithData = data.reports.filter(hasAnyValue);
         if (reportsWithData.length === 0) {
@@ -402,7 +375,7 @@ export default function ReportPage() {
                               <TableHead>Fecha Autorización</TableHead>
                               <TableHead>Motivo</TableHead>
                               <TableHead>Observaciones</TableHead>
-                              <TableHead className="w-[120px] text-center">Acciones</TableHead>
+                              <TableHead className="w-[50px]"></TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
@@ -414,10 +387,6 @@ export default function ReportPage() {
                               const horaFinalV = form.watch(`reports.${index}.horaFinal`);
                               const disableMulti = !!(fechaAusenciaV || horaInicioV || horaFinalV);
                               const disableSingle = !!(fechaInicioV || fechaFinalV);
-                              const fechaSolV = form.watch(`reports.${index}.fechaSolicitudPermiso`);
-                              const motivosPermitidos = fechaSolV ? motivosDePermiso : motivosDePermisoSinSolicitud;
-                              
-                              const showAddNovelty = isLastOccurrence(field.cedula, index);
 
                               return (
                                 <TableRow key={field.id}>
@@ -451,47 +420,21 @@ export default function ReportPage() {
                                   <TableCell><FormField control={form.control} name={`reports.${index}.fechaAusenciaUnDia`} render={({ field }) => (<Input type="date" {...field} min={dateRange?.min} max={dateRange?.max} disabled={!monthValue || disableSingle} />)}/></TableCell>
                                   <TableCell><FormField control={form.control} name={`reports.${index}.horaInicio`} render={({ field }) => (<Input type="time" {...field} disabled={disableSingle} />)}/></TableCell>
                                   <TableCell><FormField control={form.control} name={`reports.${index}.horaFinal`} render={({ field }) => (<Input type="time" {...field} disabled={disableSingle} />)}/></TableCell>
-                                  <TableCell>
-                                    <FormField control={form.control} name={`reports.${index}.fechaSolicitudPermiso`} render={({ field }) => (
-                                      <Input type="date" {...field} min={dateRange?.min} max={dateRange?.max} disabled={!monthValue} onChange={(e) => {
-                                          field.onChange(e);
-                                          if (!e.target.value) {
-                                              form.setValue(`reports.${index}.motivoPermiso`, 'No Justificada');
-                                              form.setValue(`reports.${index}.fechaAutorizacionPermiso`, '');
-                                          } else if (form.getValues(`reports.${index}.motivoPermiso`) === 'No Justificada') {
-                                              form.setValue(`reports.${index}.motivoPermiso`, ''); 
-                                          }
-                                      }}/>
-                                    )}/>
-                                  </TableCell>
-                                  <TableCell><FormField control={form.control} name={`reports.${index}.fechaAutorizacionPermiso`} render={({ field }) => (<Input type="date" {...field} min={dateRange?.min} max={dateRange?.max} disabled={!monthValue || !fechaSolV} />)}/></TableCell>
+                                  <TableCell><FormField control={form.control} name={`reports.${index}.fechaSolicitudPermiso`} render={({ field }) => (<Input type="date" {...field} min={dateRange?.min} max={dateRange?.max} disabled={!monthValue} />)}/></TableCell>
+                                  <TableCell><FormField control={form.control} name={`reports.${index}.fechaAutorizacionPermiso`} render={({ field }) => (<Input type="date" {...field} min={dateRange?.min} max={dateRange?.max} disabled={!monthValue} />)}/></TableCell>
                                   <TableCell>
                                     <FormField control={form.control} name={`reports.${index}.motivoPermiso`} render={({ field }) => (
-                                        <Select onValueChange={field.onChange} value={field.value || ''}>
-                                          <FormControl><SelectTrigger disabled={!fechaSolV}><SelectValue placeholder="Motivo" /></SelectTrigger></FormControl>
-                                          <SelectContent>{motivosPermitidos.map((m) => (<SelectItem key={m} value={m}>{m}</SelectItem>))}</SelectContent>
+                                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                          <FormControl><SelectTrigger><SelectValue placeholder="Motivo" /></SelectTrigger></FormControl>
+                                          <SelectContent>{motivosDePermiso.map((m) => (<SelectItem key={m} value={m}>{m}</SelectItem>))}</SelectContent>
                                         </Select>
                                       )} />
                                   </TableCell>
                                   <TableCell><FormField control={form.control} name={`reports.${index}.observaciones`} render={({ field }) => (<Textarea {...field} />)}/></TableCell>
                                   <TableCell>
-                                    <div className="flex items-center gap-2 justify-center w-[120px]">
-                                      {showAddNovelty && (
-                                        <Button 
-                                          type="button" 
-                                          variant="outline" 
-                                          size="icon" 
-                                          className="h-8 w-8 text-primary border-primary hover:bg-primary/10"
-                                          onClick={() => handleAddNovelty(index)}
-                                          title="Agregar otra novedad para esta persona"
-                                        >
-                                          <Plus className="h-4 w-4" />
-                                        </Button>
-                                      )}
-                                      <Button type="button" variant="ghost" size="icon" className="h-8 w-8" onClick={() => remove(index)}>
-                                        <Trash2 className="h-4 w-4 text-destructive" />
-                                      </Button>
-                                    </div>
+                                    <Button type="button" variant="ghost" size="icon" onClick={() => remove(index)}>
+                                      <Trash2 className="h-4 w-4 text-destructive" />
+                                    </Button>
                                   </TableCell>
                                 </TableRow>
                               );
@@ -500,7 +443,7 @@ export default function ReportPage() {
                         </Table>
                       </div>
 
-                      <Button type="button" variant="outline" className="mt-6 border-dashed" onClick={() => append({ cedula: '', nombreCompleto: '', cargoActual: '', fechaInicio: '', fechaFinal: '', fechaAusenciaUnDia: '', horaInicio: '', horaFinal: '', fechaSolicitudPermiso: '', fechaAutorizacionPermiso: '', motivoPermiso: 'No Justificada', observaciones: '', isManual: true })}>
+                      <Button type="button" variant="outline" className="mt-6 border-dashed" onClick={() => append({ cedula: '', nombreCompleto: '', cargoActual: '', fechaInicio: '', fechaFinal: '', fechaAusenciaUnDia: '', horaInicio: '', horaFinal: '', fechaSolicitudPermiso: '', fechaAutorizacionPermiso: '', motivoPermiso: '', observaciones: '', isManual: true })}>
                           <PlusCircle className="mr-2 h-4 w-4" /> Agregar Persona Manualmente
                       </Button>
                       {form.formState.errors.reports?.root && ( <p className="text-sm font-medium text-destructive mt-2">{form.formState.errors.reports.root.message}</p> )}
