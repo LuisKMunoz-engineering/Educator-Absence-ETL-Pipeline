@@ -2,12 +2,12 @@
 'use client';
 
 import { Suspense, useEffect, useState } from 'react';
-import { useSearchParams, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { CheckCircle, ArrowLeft, Loader2, User, School, AlertTriangle, FileWarning, Save, LogOut } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { processReport, ProcessReportInput, ProcessReportOutput } from '@/ai/flows/process-report-flow';
+import { processReport, ProcessReportInput } from '@/ai/flows/process-report-flow';
 import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 
@@ -40,7 +40,6 @@ interface SubmissionData {
 
 function SummaryDisplay() {
     const router = useRouter();
-    const searchParams = useSearchParams();
     const { toast } = useToast();
     
     const [data, setData] = useState<SubmissionData | null>(null);
@@ -49,21 +48,26 @@ function SummaryDisplay() {
     const [showConflictDialog, setShowConflictDialog] = useState(false);
 
     useEffect(() => {
-      const dataString = searchParams.get('data');
+      // Leemos de sessionStorage para evitar el error 414 de URL muy larga
+      const dataString = sessionStorage.getItem('reportSubmissionData');
       if (!dataString) {
         setStatus('error');
         setErrorMessage('No se encontraron datos del reporte para procesar.');
         return;
       }
-      const parsedData = JSON.parse(decodeURIComponent(dataString));
-      setData(parsedData);
-    }, [searchParams]);
+      try {
+        const parsedData = JSON.parse(dataString);
+        setData(parsedData);
+      } catch (e) {
+        setStatus('error');
+        setErrorMessage('Error al leer los datos temporales del reporte.');
+      }
+    }, []);
 
     useEffect(() => {
       if (data) {
         const checkExistingReport = async () => {
           try {
-            // If it's a correction, we always overwrite. No need to check for conflicts or show dialogs.
             if (data.isCorrection) {
                handleSave('overwrite');
                return;
@@ -114,6 +118,9 @@ function SummaryDisplay() {
 
         setStatus('success');
         toast({ title: 'Éxito', description: `Reporte para ${data.institutionName} guardado correctamente.` });
+        
+        // Opcionalmente limpiamos sessionStorage al finalizar con éxito
+        // sessionStorage.removeItem('reportSubmissionData');
 
       } catch (error: any) {
         setStatus('error');
@@ -124,6 +131,7 @@ function SummaryDisplay() {
     
     const handleLogout = () => {
         localStorage.clear();
+        sessionStorage.clear();
         router.push('/login');
     };
 
@@ -282,7 +290,7 @@ function SummaryDisplay() {
       );
     }
     
-    return null; // Render nothing while waiting or in an unhandled state
+    return null; 
 }
 
 export default function SummaryPage() {

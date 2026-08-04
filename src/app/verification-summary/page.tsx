@@ -1,7 +1,8 @@
+
 'use client';
 
 import { Suspense, useEffect, useState } from 'react';
-import { useSearchParams, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { CheckCircle, Loader2, User, LogOut, ListChecks, ArrowLeft } from 'lucide-react';
@@ -20,20 +21,25 @@ interface SummaryData {
 
 function VerificationSummaryDisplay() {
     const router = useRouter();
-    const searchParams = useSearchParams();
     
     const [data, setData] = useState<SummaryData | null>(null);
 
     useEffect(() => {
-      const dataString = searchParams.get('data');
+      // Leemos de sessionStorage para evitar el error 414
+      const dataString = sessionStorage.getItem('verificationSummaryData');
       if (dataString) {
-        const parsedData = JSON.parse(decodeURIComponent(dataString));
-        setData(parsedData);
+        try {
+          const parsedData = JSON.parse(dataString);
+          setData(parsedData);
+        } catch (e) {
+          console.error("Error al parsear datos de verificación.");
+        }
       }
-    }, [searchParams]);
+    }, []);
 
     const handleLogout = () => {
         localStorage.clear();
+        sessionStorage.clear();
         router.push('/login');
     };
 

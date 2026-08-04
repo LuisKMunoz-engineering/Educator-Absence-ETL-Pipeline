@@ -84,7 +84,7 @@ export default function LoginPage() {
           <CardHeader className="text-center items-center">
             <DynamicLogo width={180} height={180} className="mb-4" />
             <CardTitle className="text-3xl font-bold text-primary">AppAusentismo</CardTitle>
-            <CardDescription>Gestión de Reportes SED-CAUCA</CardDescription>
+            <CardDescription>Aplicativo para el Reporte y Gestión de Ausentismo</CardDescription>
           </CardHeader>
           <form onSubmit={handleLogin}>
             <CardContent>
@@ -94,7 +94,7 @@ export default function LoginPage() {
                   <Input
                     id="email"
                     type="text"
-                    placeholder="admin o rector@correo.com"
+                    placeholder="usuario@correo.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     required
@@ -135,7 +135,7 @@ export default function LoginPage() {
           </form>
         </Card>
         <p className="mt-6 text-center text-xs text-muted-foreground italic">
-          Secretaría de Educación del Cauca - Oficina de Sistemas
+          Gestión del Talento Humano Educativo
         </p>
       </div>
     </main>

@@ -1,3 +1,4 @@
+
 'use client';
 
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -118,6 +119,7 @@ export default function VerificationPage() {
 
   const handleLogout = () => {
     localStorage.clear();
+    sessionStorage.clear();
     router.push('/login');
   }
   
@@ -218,8 +220,19 @@ export default function VerificationPage() {
     try {
       const result = await verifyReports({ month: data.month, verifiedDaneCodes: newlyVerifiedDaneCodes });
       if (!result.success) throw new Error(result.error);
+      
       const verifiedInsts = groupedReports.filter(g => newlyVerifiedDaneCodes.includes(g.daneCode)).map(g => ({ name: g.institutionName, dane: g.daneCode }));
-      router.push(`/verification-summary?data=${encodeURIComponent(JSON.stringify({ directorName: data.reporterName, month: data.month, verifiedInstitutions: verifiedInsts }))}`);
+      
+      const summaryData = { 
+        directorName: data.reporterName, 
+        month: data.month, 
+        verifiedInstitutions: verifiedInsts 
+      };
+
+      // Usamos sessionStorage para evitar el error 414
+      sessionStorage.setItem('verificationSummaryData', JSON.stringify(summaryData));
+      router.push('/verification-summary');
+
     } catch (error: any) {
       toast({ variant: "destructive", title: "Error", description: error.message });
     }
@@ -424,15 +437,15 @@ export default function VerificationPage() {
             <Button className="py-8 justify-start h-auto whitespace-normal text-left shadow-md transition-all hover:scale-[1.02]" onClick={() => setShowWelcomeDialog(false)}>
               <ClipboardCheck className="mr-4 h-8 w-8 shrink-0 text-white" />
               <div>
-                <p className="font-bold text-lg">Verificar reportes institucionales</p>
-                <p className="text-sm opacity-90">Revisar y validar los reportes de ausentismo enviados por las instituciones bajo su cargo.</p>
+                <p className="font-bold text-lg">Verificar reportes</p>
+                <p className="text-sm opacity-90">Revisar y validar los reportes de los establecimientos educativos.</p>
               </div>
             </Button>
             <Button variant="outline" className="py-8 justify-start h-auto whitespace-normal text-left border-primary text-primary shadow-sm transition-all hover:scale-[1.02] hover:bg-primary/5" onClick={() => router.push('/verification/soportes')}>
               <ExternalLink className="mr-4 h-8 w-8 shrink-0" />
               <div>
                 <p className="font-bold text-lg">Reportar Ausentismo ante la SED</p>
-                <p className="text-sm">Cargar evidencias y soportes finales en el formulario oficial de la Secretaría de Educación.</p>
+                <p className="text-sm">Cargar evidencias y soportes finales en el formulario oficial de la Secretaría de Educación Departamental.</p>
               </div>
             </Button>
           </div>

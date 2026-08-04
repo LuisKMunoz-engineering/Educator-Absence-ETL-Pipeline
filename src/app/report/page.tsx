@@ -1,3 +1,4 @@
+
 'use client';
 
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -291,8 +292,10 @@ export default function ReportPage() {
         }];
     }
     const dataToSend = { ...data, reports: reportsToSend, institutionName, isCorrection };
-    const query = encodeURIComponent(JSON.stringify(dataToSend));
-    router.push(`/summary?data=${query}`);
+    
+    // Almacenamos en sessionStorage para evitar el error 414 de URL muy larga
+    sessionStorage.setItem('reportSubmissionData', JSON.stringify(dataToSend));
+    router.push('/summary');
   }
 
   const absenteeismChoice = form.watch('absenteeismChoice');
