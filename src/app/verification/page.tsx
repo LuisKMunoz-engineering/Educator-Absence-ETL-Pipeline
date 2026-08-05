@@ -250,13 +250,13 @@ export default function VerificationPage() {
 
       <main className="p-4 md:p-6 max-w-7xl mx-auto">
         <div className="flex flex-col items-center justify-center mb-6">
-          <h1 className="text-3xl font-bold text-primary font-headline mt-2">Página de Verificación</h1>
+          <h1 className="text-3xl font-bold text-primary font-headline mt-2">Verificación de Reportes</h1>
         </div>
         
         <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
             <Card>
-              <CardHeader><CardTitle>Información del Reportante</CardTitle></CardHeader>
+              <CardHeader><CardTitle>Información del Director de Núcleo</CardTitle></CardHeader>
               <CardContent className="grid md:grid-cols-3 gap-6">
                 <FormField control={form.control} name="reporterName" render={({ field }) => (<FormItem><FormLabel>Nombre</FormLabel><Input {...field} readOnly className="bg-muted/20"/></FormItem>)} />
                 <FormField control={form.control} name="reporterCedula" render={({ field }) => (<FormItem><FormLabel>Cédula</FormLabel><Input {...field} readOnly className="bg-muted/20"/></FormItem>)} />
@@ -383,7 +383,7 @@ export default function VerificationPage() {
             <div className="flex justify-end pt-4">
               <Button type="submit" size="lg" disabled={!canSubmit || form.formState.isSubmitting} className="h-12 px-8 font-bold shadow-md">
                 {form.formState.isSubmitting ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <ShieldCheck className="mr-2 h-5 w-5" />}
-                Enviar Verificación de Reportes
+                Confirmar Verificación a Control de Ausentismo
               </Button>
             </div>
         </form>
