@@ -33,7 +33,7 @@ Supervisa un conjunto de instituciones y valida los reportes enviados por los re
 
 El Administrador tiene el control total sobre los datos consolidados y la seguridad del sistema.
 
-**Credenciales por defecto:** `admin` / `12345`
+**Credenciales por defecto:** `admin'
 
 **Funcionalidades:**
 1.  **Gestión de Usuarios (Centralizada):**
